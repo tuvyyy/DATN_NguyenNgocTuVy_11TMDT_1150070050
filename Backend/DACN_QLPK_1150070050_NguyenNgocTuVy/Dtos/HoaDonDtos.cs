@@ -60,6 +60,16 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public string MaHd { get; set; } = string.Empty;
         public string? LoaiHoaDon { get; set; }
         public string? BenhNhan { get; set; }
+        public long? IdBenhNhan { get; set; }
+        public string? SoDienThoai { get; set; }
+        public long? IdHoSo { get; set; }
+        public int? IdKhuTiepDon { get; set; }
+        public string? MaKhuTiepDon { get; set; }
+        public string? TenKhuTiepDon { get; set; }
+        public string? PhongKham { get; set; }
+        public bool CanThanhToan { get; set; } = true;
+        public string? LyDoKhongThanhToan { get; set; }
+        public bool QueueCreated { get; set; }
         public decimal? TongTien { get; set; }
         public DateTime? NgayTao { get; set; }
         public string? TrangThai { get; set; }
@@ -79,12 +89,32 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public DateTime? NgayTao { get; set; }
         public DateTime? NgayThanhToan { get; set; }
         public string? BenhNhan { get; set; }
+        public long? IdBenhNhan { get; set; }
+        public string? SoDienThoai { get; set; }
+        public long? IdHoSo { get; set; }
+        public int? IdKhuTiepDon { get; set; }
+        public string? MaKhuTiepDon { get; set; }
+        public string? TenKhuTiepDon { get; set; }
+        public string? PhongKham { get; set; }
+        public bool CanThanhToan { get; set; } = true;
+        public string? LyDoKhongThanhToan { get; set; }
+        public bool QueueCreated { get; set; }
         public List<HoaDonItemDto> ChiTiet { get; set; } = new();
     }
 
     public class HoaDonItemDto
     {
         public string? MoTa { get; set; }
+        public long? IdDichVu { get; set; }
+        public string? MaDichVu { get; set; }
+        public string? TenDichVu { get; set; }
+        public int? IdPhong { get; set; }
+        public string? TenPhong { get; set; }
+        public int? IdKhuTiepDon { get; set; }
+        public string? MaKhuTiepDon { get; set; }
+        public string? TenKhuTiepDon { get; set; }
+        public bool KhuHopLe { get; set; } = true;
+        public string? LyDoKhongHopLe { get; set; }
         public int? SoLuong { get; set; }
         public decimal? DonGia { get; set; }
         public decimal? ThanhTien { get; set; }
@@ -92,5 +122,6 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
     public class ConfirmPaymentRequest
     {
         public long IdThuNgan { get; set; }
+        public string? HinhThucThanhToan { get; set; }
     }
 }

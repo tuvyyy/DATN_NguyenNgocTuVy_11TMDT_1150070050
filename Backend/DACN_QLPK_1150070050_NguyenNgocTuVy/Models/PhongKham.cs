@@ -11,6 +11,8 @@ public partial class PhongKham
 
     public string? TenPhong { get; set; }
 
+    public int? IdKhuTiepDon { get; set; }
+
     public string? KhoaPhong { get; set; }
 
     public string? MoTa { get; set; }
@@ -22,6 +24,8 @@ public partial class PhongKham
     public virtual ICollection<DichVuGium> DichVuGia { get; set; } = new List<DichVuGium>();
 
     public virtual ICollection<DichVu> DichVus { get; set; } = new List<DichVu>();
+
+    public virtual KhuTiepDon? IdKhuTiepDonNavigation { get; set; }
 
     public virtual ICollection<LanKham> LanKhams { get; set; } = new List<LanKham>();
 }

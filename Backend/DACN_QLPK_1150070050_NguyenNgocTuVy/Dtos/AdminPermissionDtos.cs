@@ -39,6 +39,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public int? IdVaiTro { get; set; }   // nullable do entity hiện là int?
         public int? IdQuyen { get; set; }    // nullable do entity hiện là int?
         public string? ChucNang { get; set; }
+        public string? MaChucNang { get; set; }
         public string? MaQuyen { get; set; }
     }
 }

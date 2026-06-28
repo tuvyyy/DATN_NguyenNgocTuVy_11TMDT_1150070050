@@ -3,16 +3,20 @@ using Microsoft.EntityFrameworkCore;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Data;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Models;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos;
+using DACN_QLPK_1150070050_NguyenNgocTuVy.Services;
 using System.Security.Claims;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers.PDF;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DACN.Controllers
-{
+    {
     [ApiController]
+    [Authorize]
     [Route("api/ktv/dvkt")]
     public class ThucHienDVKTController : ControllerBase
     {
         private readonly DACNDbContext _db;
+        private readonly IKhamBenhAuditService _audit;
 
         // ===========================
         // TRẠNG THÁI CHUẨN
@@ -20,14 +24,18 @@ namespace DACN.Controllers
         private const string TRANG_THAI_PENDING = "pending";      // Chờ thực hiện
         private const string TRANG_THAI_PROCESSING = "processing"; // Đang thực hiện
         private const string TRANG_THAI_DONE = "done";            // Đã hoàn thành
+        private const string TRANG_THAI_SENT = "sent";            // Đã gửi kết quả
 
         private const string KQ_STATUS_DRAFT = "draft";
         private const string KQ_STATUS_COMPLETED = "completed";
         private const string KQ_STATUS_DONE = "done";
+        private const string KQ_STATUS_APPROVED = "approved";
+        private const string KQ_STATUS_SENT = "sent";
 
-        public ThucHienDVKTController(DACNDbContext db)
+        public ThucHienDVKTController(DACNDbContext db, IKhamBenhAuditService audit)
         {
             _db = db;
+            _audit = audit;
         }
 
         // ============================================================
@@ -35,13 +43,37 @@ namespace DACN.Controllers
         // ============================================================
         private long GetKtvId()
         {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
-            if (claim == null)
+            var raw = User.FindFirstValue("sub")
+                ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("nameid");
+
+            if (!long.TryParse(raw, out var id))
             {
                 throw new InvalidOperationException("Không tìm thấy thông tin người thực hiện trong token.");
             }
 
-            return long.Parse(claim.Value);
+            return id;
+        }
+
+        private IActionResult ForbiddenMessage(string message)
+            => StatusCode(403, new { message });
+
+        private static string NormalizeResultStatus(string? status)
+            => string.IsNullOrWhiteSpace(status) ? KQ_STATUS_DRAFT : status.Trim().ToLowerInvariant();
+
+        private static bool IsLockedResultStatus(string? status)
+        {
+            var normalized = NormalizeResultStatus(status);
+            return normalized == KQ_STATUS_APPROVED || normalized == KQ_STATUS_SENT;
+        }
+
+        private async Task<bool> HasKetQuaContentAsync(DvktKetQua kq)
+        {
+            if (!string.IsNullOrWhiteSpace(kq.KetQuaText) || !string.IsNullOrWhiteSpace(kq.FileUrl))
+                return true;
+
+            return await _db.DvktKetQuaChiTiets
+                .AnyAsync(x => x.IdKetQua == kq.Id && x.GiaTri != null && x.GiaTri.Trim() != "");
         }
 
         // ============================================================
@@ -207,7 +239,7 @@ namespace DACN.Controllers
                 }
             )
             .Where(x =>
-                x.cd.TrangThai == TRANG_THAI_DONE &&
+                (x.cd.TrangThai == TRANG_THAI_DONE || x.cd.TrangThai == TRANG_THAI_SENT) &&
                 x.cd.IdNguoiThucHien == ktvId &&
                 x.cd.HoanThanhLuc >= tuNgay &&
                 x.cd.HoanThanhLuc < denNgay
@@ -228,6 +260,7 @@ namespace DACN.Controllers
 
                 trangThai = x.cd.TrangThai,
                 trangThaiKQ = x.kq != null ? x.kq.TrangThai : "draft",
+                x.cd.HoanThanhLuc,
 
                 ketQuaText = x.kq != null ? x.kq.KetQuaText : null,
                 fileUrl = x.kq != null ? x.kq.FileUrl : null
@@ -302,7 +335,11 @@ namespace DACN.Controllers
                 return BadRequest("Chỉ được hủy nhận khi DVKT đang ở trạng thái 'đang thực hiện'.");
 
             if (cd.IdNguoiThucHien != ktvId)
-                return Forbid("Bạn không phải người đang thực hiện DVKT này.");
+                return ForbiddenMessage("Bạn không phải người đang thực hiện DVKT này.");
+
+            var existingResult = await _db.DvktKetQuas.FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
+            if (existingResult != null && await HasKetQuaContentAsync(existingResult))
+                return BadRequest("DVKT đã có kết quả, không thể hủy nhận và trả về hàng chờ.");
 
             cd.TrangThai = TRANG_THAI_PENDING;
             cd.IdNguoiThucHien = null;
@@ -328,7 +365,10 @@ namespace DACN.Controllers
 
             // Chỉ người đang thực hiện mới được nhập kết quả
             if (cd.IdNguoiThucHien != ktvId)
-                return Forbid("Bạn không phải người thực hiện DVKT này.");
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
+
+            if (cd.TrangThai == TRANG_THAI_SENT)
+                return BadRequest("Kết quả đã gửi về phòng khám, không thể chỉnh sửa.");
 
             if (cd.TrangThai != TRANG_THAI_PROCESSING && cd.TrangThai != TRANG_THAI_DONE)
                 return BadRequest("Chỉ được nhập kết quả khi DVKT đang thực hiện hoặc đã hoàn thành.");
@@ -336,6 +376,9 @@ namespace DACN.Controllers
             // Check đã có kết quả chưa
             var kq = await _db.DvktKetQuas
                 .FirstOrDefaultAsync(x => x.IdChiDinhDvkt == cd.Id);
+
+            if (kq != null && IsLockedResultStatus(kq.TrangThai))
+                return BadRequest("Kết quả đã được duyệt hoặc đã gửi, vui lòng hủy duyệt trước khi chỉnh sửa.");
 
             if (kq == null)
             {
@@ -395,7 +438,13 @@ namespace DACN.Controllers
                 return BadRequest("Kết quả không gắn với chỉ định DVKT hợp lệ.");
 
             if (cd.IdNguoiThucHien != ktvId)
-                return Forbid("Bạn không phải người thực hiện DVKT này.");
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
+
+            if (cd.TrangThai == TRANG_THAI_SENT || IsLockedResultStatus(kq.TrangThai))
+                return BadRequest("Kết quả đã được duyệt hoặc đã gửi, không thể chỉnh sửa chỉ tiêu.");
+
+            if (cd.TrangThai != TRANG_THAI_PROCESSING && cd.TrangThai != TRANG_THAI_DONE)
+                return BadRequest("Chỉ được nhập chỉ tiêu khi DVKT đang thực hiện hoặc đã hoàn thành.");
 
             // Lấy thông tin chỉ tiêu (có min–max)
 
@@ -444,6 +493,9 @@ namespace DACN.Controllers
                 existed.DanhGia = danhGia;
             }
 
+            if (!string.IsNullOrWhiteSpace(dto.GiaTri) && NormalizeResultStatus(kq.TrangThai) == KQ_STATUS_DRAFT)
+                kq.TrangThai = KQ_STATUS_COMPLETED;
+
             await _db.SaveChangesAsync();
             await AddLog(cd.Id, "ket_qua_chi_tiet", "Nhập/ cập nhật kết quả chỉ tiêu");
 
@@ -478,7 +530,7 @@ namespace DACN.Controllers
                 return NotFound("Không tìm thấy chỉ định DVKT.");
 
             if (cd.IdNguoiThucHien != ktvId)
-                return Forbid("Bạn không phải người thực hiện DVKT này.");
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
 
             var dvkt = await _db.Dvkts.FindAsync(cd.IdDvkt);
 
@@ -559,16 +611,38 @@ namespace DACN.Controllers
             var ktvId = GetKtvId();
 
             var kq = await _db.DvktKetQuas
+                .Include(x => x.IdChiDinhDvktNavigation)
                 .FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
 
             if (kq == null)
                 return BadRequest("Chưa có dữ liệu kết quả để duyệt.");
 
-            kq.TrangThai = "approved";
+            var cd = kq.IdChiDinhDvktNavigation;
+            if (cd.IdNguoiThucHien != ktvId)
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
+
+            if (cd.TrangThai != TRANG_THAI_DONE)
+                return BadRequest("Chỉ được duyệt kết quả sau khi DVKT đã hoàn thành.");
+
+            var currentStatus = NormalizeResultStatus(kq.TrangThai);
+            if (currentStatus == KQ_STATUS_SENT)
+                return BadRequest("Kết quả đã gửi về phòng khám, không thể duyệt lại.");
+
+            if (currentStatus == KQ_STATUS_APPROVED)
+                return BadRequest("Kết quả đã được duyệt.");
+
+            if (!await HasKetQuaContentAsync(kq))
+                return BadRequest("Chưa có nội dung kết quả để duyệt.");
+
+            var duChiTieu = await KiemTraDuChiTieuAsync(id);
+            if (!duChiTieu)
+                return BadRequest("Chưa nhập đầy đủ kết quả các chỉ tiêu bắt buộc.");
+
+            kq.TrangThai = KQ_STATUS_APPROVED;
             kq.ThoiGianThucHien = DateTime.Now;
 
             await _db.SaveChangesAsync();
-            await AddLog(id, "duyet_ket_qua");
+            await AddLog(id, "duyet_ket_qua", "Duyệt và khóa kết quả cận lâm sàng");
 
             return Ok(new { message = "Đã duyệt kết quả." });
         }
@@ -577,16 +651,30 @@ namespace DACN.Controllers
         [HttpPatch("huy-duyet/{id}")]
         public async Task<IActionResult> HuyDuyet(long id)
         {
+            var ktvId = GetKtvId();
+
             var kq = await _db.DvktKetQuas
+                .Include(x => x.IdChiDinhDvktNavigation)
                 .FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
 
             if (kq == null)
                 return NotFound("Không tìm thấy kết quả.");
 
-            kq.TrangThai = "draft";
+            var cd = kq.IdChiDinhDvktNavigation;
+            if (cd.IdNguoiThucHien != ktvId)
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
+
+            var currentStatus = NormalizeResultStatus(kq.TrangThai);
+            if (currentStatus == KQ_STATUS_SENT || cd.TrangThai == TRANG_THAI_SENT)
+                return BadRequest("Kết quả đã gửi về phòng khám, không thể hủy duyệt.");
+
+            if (currentStatus != KQ_STATUS_APPROVED)
+                return BadRequest("Chỉ được hủy duyệt khi kết quả đang ở trạng thái đã duyệt.");
+
+            kq.TrangThai = KQ_STATUS_COMPLETED;
 
             await _db.SaveChangesAsync();
-            await AddLog(id, "huy_duyet");
+            await AddLog(id, "huy_duyet", "Hủy duyệt để mở lại kết quả cho chỉnh sửa");
 
             return Ok(new { message = "Đã hủy duyệt." });
         }
@@ -594,14 +682,30 @@ namespace DACN.Controllers
         [HttpPatch("send/{id}")]
         public async Task<IActionResult> SendKetQua(long id)
         {
+            var ktvId = GetKtvId();
+
             var kq = await _db.DvktKetQuas
+                .Include(x => x.IdChiDinhDvktNavigation)
                 .FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
 
             if (kq == null)
                 return BadRequest("KQ chưa có, không thể gửi.");
 
-            if (kq.TrangThai != "approved")
+            var cd = kq.IdChiDinhDvktNavigation;
+            if (cd.IdNguoiThucHien != ktvId)
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
+
+            if (cd.TrangThai == TRANG_THAI_SENT || NormalizeResultStatus(kq.TrangThai) == KQ_STATUS_SENT)
+                return BadRequest("Kết quả đã được gửi về phòng khám.");
+
+            if (cd.TrangThai != TRANG_THAI_DONE)
+                return BadRequest("Chỉ được gửi kết quả sau khi DVKT đã hoàn thành.");
+
+            if (NormalizeResultStatus(kq.TrangThai) != KQ_STATUS_APPROVED)
                 return BadRequest("Kết quả chưa duyệt, không thể gửi.");
+
+            if (!await HasKetQuaContentAsync(kq))
+                return BadRequest("Chưa có nội dung kết quả để gửi.");
 
             // ====== 1) TẠO PDF ======
             var pdfController = new ThucHienDVKTPDFController(_db);
@@ -624,14 +728,13 @@ namespace DACN.Controllers
 
             // ====== 3) CẬP NHẬT DB ======
             kq.FileUrl = fileUrl;
-            kq.TrangThai = "sent";
+            kq.TrangThai = KQ_STATUS_SENT;
 
-            var cd = await _db.ChiDinhDvkts.FindAsync(id);
-            if (cd != null)
-            {
-                cd.TrangThai = "sent";
-                cd.HoanThanhLuc = DateTime.Now;
-            }
+            cd.TrangThai = TRANG_THAI_SENT;
+            cd.HoanThanhLuc = DateTime.Now;
+            cd.BacSiDaDocKetQua = false;
+            cd.BacSiDocKetQuaLuc = null;
+            cd.IdBacSiDocKetQua = null;
 
             await _db.SaveChangesAsync();
             await AddLog(id, "gui_ket_qua", "Gửi kết quả + PDF");
@@ -667,7 +770,7 @@ namespace DACN.Controllers
             if (kq == null) return false;
 
             var filledChiTieus = await _db.DvktKetQuaChiTiets
-                .Where(x => x.IdKetQua == kq.Id)
+                .Where(x => x.IdKetQua == kq.Id && x.GiaTri != null && x.GiaTri.Trim() != "")
                 .Select(x => x.IdChiTieu)
                 .Distinct()
                 .ToListAsync();
@@ -690,18 +793,25 @@ namespace DACN.Controllers
             if (cd == null) return NotFound("Không tìm thấy DVKT.");
 
             if (cd.IdNguoiThucHien != ktvId)
-                return Forbid("Bạn không phải người thực hiện DVKT này.");
+                return ForbiddenMessage("Bạn không phải người thực hiện DVKT này.");
 
-            if (cd.TrangThai != TRANG_THAI_PROCESSING && cd.TrangThai != TRANG_THAI_DONE)
+            if (cd.TrangThai != TRANG_THAI_PROCESSING)
                 return BadRequest("Chỉ được hoàn thành DVKT khi đang ở trạng thái 'đang thực hiện'.");
+
+            var kq = await _db.DvktKetQuas.FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
+            if (kq == null || !await HasKetQuaContentAsync(kq))
+                return BadRequest("Chưa nhập nội dung kết quả, không thể hoàn thành DVKT.");
+
+            if (IsLockedResultStatus(kq.TrangThai))
+                return BadRequest("Kết quả đã được duyệt hoặc đã gửi, không thể hoàn thành lại.");
 
             // Kiểm tra đủ chỉ tiêu chưa
             var duChiTieu = await KiemTraDuChiTieuAsync(id);
             if (!duChiTieu)
                 return BadRequest("Chưa nhập đầy đủ kết quả các chỉ tiêu bắt buộc.");
 
-            // Không thay đổi trạng thái KẾT QUẢ!!!
-            // (Giữ nguyên trạng thái completed/approved của kq)
+            if (NormalizeResultStatus(kq.TrangThai) == KQ_STATUS_DRAFT)
+                kq.TrangThai = KQ_STATUS_COMPLETED;
 
             cd.TrangThai = TRANG_THAI_DONE;
             cd.HoanThanhLuc = DateTime.Now;
@@ -717,12 +827,47 @@ namespace DACN.Controllers
         // 10) XUẤT PDF DVKT (XEM PDF)
         // ===========================
         [HttpGet("pdf/{id}")]
-        public async Task<IActionResult> ExportPdf(long id)
+        public async Task<IActionResult> ExportPdf(long id, [FromQuery] bool download = false)
         {
+            var chiDinh = await _db.ChiDinhDvkts
+                .AsNoTracking()
+                .Include(x => x.IdDvktNavigation)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
             // gọi lại controller PDF cũ
             var pdfCtrl = new ThucHienDVKTPDFController(_db);
 
             var file = await pdfCtrl.Export(id); // file = FileContentResult
+
+            if (file is FileContentResult pdfFile)
+            {
+                var downloadName = string.IsNullOrWhiteSpace(pdfFile.FileDownloadName)
+                    ? $"KET_QUA_DVKT_{id}.pdf"
+                    : pdfFile.FileDownloadName;
+
+                await _audit.WriteAsync(
+                    chiDinh?.IdLanKham,
+                    "PRINT_DOCUMENT",
+                    doiTuong: "KET_QUA_DVKT",
+                    idDoiTuong: id,
+                    duLieuSau: new
+                    {
+                        fileName = downloadName,
+                        download,
+                        maDvkt = chiDinh?.IdDvktNavigation?.MaDvkt,
+                        tenDvkt = chiDinh?.IdDvktNavigation?.TenDvkt
+                    });
+
+                if (!download)
+                {
+                    pdfFile.FileDownloadName = null;
+                    Response.Headers["Content-Disposition"] = $"inline; filename=\"KET_QUA_DVKT_{id}.pdf\"";
+                    return pdfFile;
+                }
+
+                pdfFile.FileDownloadName = downloadName;
+                return pdfFile;
+            }
 
             return file;
         }
@@ -733,9 +878,28 @@ namespace DACN.Controllers
         [HttpGet("logs/{idChiDinh}")]
         public async Task<IActionResult> GetLogs(long idChiDinh)
         {
-            var logs = await _db.DvktThucHienLogs
-                .Where(x => x.IdChiDinhDvkt == idChiDinh)
-                .OrderByDescending(x => x.CreatedAt)
+            var exists = await _db.ChiDinhDvkts.AnyAsync(x => x.Id == idChiDinh);
+            if (!exists)
+                return NotFound("Không tìm thấy chỉ định DVKT.");
+
+            var logs = await (
+                from log in _db.DvktThucHienLogs
+                join user in _db.NguoiDungs on log.IdNguoiThucHien equals user.Id into users
+                from user in users.DefaultIfEmpty()
+                where log.IdChiDinhDvkt == idChiDinh
+                orderby log.CreatedAt descending
+                select new
+                {
+                    log.Id,
+                    log.IdChiDinhDvkt,
+                    log.IdNguoiThucHien,
+                    NguoiThucHien = user != null ? user.HoTen : null,
+                    TenDangNhap = user != null ? user.TenDangNhap : null,
+                    log.Action,
+                    log.Note,
+                    log.CreatedAt
+                }
+            )
                 .ToListAsync();
 
             return Ok(logs);

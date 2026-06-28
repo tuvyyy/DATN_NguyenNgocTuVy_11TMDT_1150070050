@@ -1,43 +1,44 @@
 import {
-  getRoles,
-  getPermissions,
-  getRolePermissions,
-  updateRolePermissions,
-  getUserPermissions,
+  applyReceptionPreset,
   checkUserPermission,
+  cloneUserPermissions,
+  getPermissionAuditLogs,
+  getPermissions,
+  getRoleMembers,
+  getRolePermissions,
+  getRoles,
+  getUserPermissionConflicts,
+  getUserPermissions,
+  updateRolePermissions,
+  updateUserRoles,
+  undoLastPermissionChange,
 } from "../api/AdminPermissionApi";
 
-/* ============================================================
-   🎯 ADMIN PERMISSION CONTROLLER – Xử lý logic phân quyền
-   ============================================================ */
-
-// ==================== LOAD DỮ LIỆU BAN ĐẦU ====================
 export async function loadPermissionData(setRoles, setPermissions) {
   try {
-    const roles = await getRoles();
-    const permissions = await getPermissions();
-    setRoles(roles || []);
-    setPermissions(permissions || []);
+    const [roles, permissions] = await Promise.all([getRoles(), getPermissions()]);
+    setRoles(Array.isArray(roles) ? roles : []);
+    setPermissions(Array.isArray(permissions) ? permissions : []);
+    return { ok: true, message: "Tải dữ liệu thành công." };
   } catch (err) {
-    console.error("❌ Lỗi loadPermissionData:", err);
-    alert("Không thể tải dữ liệu vai trò và quyền.");
+    console.error("[AdminPermissionController.loadPermissionData]", err);
+    setRoles([]);
+    setPermissions([]);
+    return { ok: false, message: "Không tải được danh sách vai trò hoặc quyền." };
   }
 }
 
-// ==================== LOAD QUYỀN THEO VAI TRÒ ====================
 export async function handleRoleSelect(roleId, setSelectedRole, setRolePermissions) {
-  if (!roleId) return alert("⚠️ Chưa chọn vai trò.");
+  if (!roleId) return { ok: false, message: "Thiếu vai trò." };
   try {
     setSelectedRole(roleId);
     const data = await getRolePermissions(roleId);
 
-    console.log("[API] GET /vaitroquyen =>", data);
-
-    // ✅ Chuẩn hóa dữ liệu BE trả về
-    const formatted = data.map(p => ({
+    const formatted = (Array.isArray(data) ? data : []).map((p) => ({
       idQuyen: p.idQuyen,
       maQuyen: p.maQuyen,
-      tenChucNang: p.tenChucNang,
+      tenChucNang: p.tenChucNang || p.chucNang || "Chưa phân nhóm",
+      maChucNang: p.maChucNang || "",
       xem: p.xem ?? false,
       them: p.them ?? false,
       sua: p.sua ?? false,
@@ -45,53 +46,143 @@ export async function handleRoleSelect(roleId, setSelectedRole, setRolePermissio
       xuat: p.xuat ?? false,
     }));
 
-    console.log("✅ Sau khi format:", formatted);
     setRolePermissions(formatted);
+    return { ok: true, message: "Tải quyền vai trò thành công." };
   } catch (err) {
-    console.error("❌ Lỗi tải quyền theo vai trò:", err);
-    alert("Không thể tải danh sách quyền của vai trò này.");
+    console.error("[AdminPermissionController.handleRoleSelect]", err);
+    setRolePermissions([]);
+    return { ok: false, message: "Không tải được quyền của vai trò này." };
   }
 }
 
-
-// ==================== CẬP NHẬT QUYỀN CHO VAI TRÒ ====================
-export async function handleUpdateRolePermissions(roleId, selectedIds) {
-  if (!roleId) return alert("⚠️ Chưa chọn vai trò cần cập nhật.");
+export async function handleLoadRoleMembers(roleId, roleName, setMembers) {
+  if (!roleId) return { ok: false, message: "Thiếu vai trò." };
   try {
-    const res = await updateRolePermissions(roleId, selectedIds);
-
-    if (res && res.message) {
-      alert("✅ " + res.message);
-    } else {
-      alert("❌ Cập nhật quyền thất bại, vui lòng thử lại.");
-    }
+    const data = await getRoleMembers(roleId, roleName);
+    setMembers(Array.isArray(data) ? data : []);
+    return { ok: true, message: "Tải danh sách nhân viên thành công." };
   } catch (err) {
-    console.error("❌ Lỗi cập nhật quyền vai trò:", err);
-    alert("❌ Có lỗi xảy ra khi cập nhật quyền.");
+    console.error("[AdminPermissionController.handleLoadRoleMembers]", err);
+    setMembers([]);
+    return { ok: false, message: "Không tải được danh sách nhân viên theo vai trò." };
   }
 }
 
-// ==================== LẤY DANH SÁCH QUYỀN NGƯỜI DÙNG ====================
+export async function handleUpdateRolePermissions(roleId, selectedUpdates) {
+  if (!roleId) {
+    return { ok: false, message: "Chưa chọn vai trò cần cập nhật." };
+  }
+  try {
+    const res = await updateRolePermissions(roleId, selectedUpdates);
+    if (res?.message) {
+      return { ok: true, message: res.message };
+    }
+    return { ok: false, message: "Cập nhật quyền thất bại." };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleUpdateRolePermissions]", err);
+    return { ok: false, message: "Có lỗi khi cập nhật quyền vai trò." };
+  }
+}
+
 export async function handleGetUserPermissions(userId, setUserPermissions) {
-  if (!userId) return;
+  if (!userId) {
+    setUserPermissions(null);
+    return { ok: false, message: "Chưa chọn nhân viên." };
+  }
   try {
     const res = await getUserPermissions(userId);
-    if (res) setUserPermissions(res);
-    else alert("⚠️ Không tìm thấy quyền cho người dùng này.");
+    setUserPermissions(res || null);
+    return { ok: true, message: "Tải quyền nhân viên thành công." };
   } catch (err) {
-    console.error("❌ Lỗi lấy quyền người dùng:", err);
+    console.error("[AdminPermissionController.handleGetUserPermissions]", err);
+    setUserPermissions(null);
+    return { ok: false, message: "Không tải được quyền nhân viên." };
   }
 }
 
-// ==================== KIỂM TRA QUYỀN CỦA NGƯỜI DÙNG ====================
+export async function handleUpdateUserRoles(userId, roleNames) {
+  if (!userId) return { ok: false, message: "Chưa chọn nhân viên." };
+  try {
+    const res = await updateUserRoles(userId, roleNames);
+    if (res?.message) {
+      return { ok: true, message: res.message };
+    }
+    return { ok: false, message: "Cập nhật vai trò người dùng thất bại." };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleUpdateUserRoles]", err);
+    return { ok: false, message: "Có lỗi khi cập nhật vai trò người dùng." };
+  }
+}
+
 export async function handleCheckUserPermission(userId, feature, action) {
   if (!userId || !feature || !action) return false;
   try {
-    const allowed = await checkUserPermission(userId, feature, action);
-    console.log(`👤 Check quyền: ${feature}/${action} = ${allowed}`);
-    return allowed;
+    return await checkUserPermission(userId, feature, action);
   } catch (err) {
-    console.error("❌ Lỗi kiểm tra quyền:", err);
+    console.error("[AdminPermissionController.handleCheckUserPermission]", err);
     return false;
+  }
+}
+
+export async function handleApplyReceptionPreset(userId, preset) {
+  if (!userId || !preset) return { ok: false, message: "Thiếu dữ liệu preset." };
+  try {
+    const res = await applyReceptionPreset(userId, preset);
+    if (res?.message) return { ok: true, message: res.message, data: res };
+    return { ok: false, message: "Áp dụng preset thất bại." };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleApplyReceptionPreset]", err);
+    return { ok: false, message: "Không thể áp dụng preset quyền." };
+  }
+}
+
+export async function handleCloneUserPermissions(sourceUserId, targetUserId) {
+  if (!sourceUserId || !targetUserId) return { ok: false, message: "Thiếu user nguồn hoặc đích." };
+  try {
+    const res = await cloneUserPermissions(sourceUserId, targetUserId);
+    if (res?.message) return { ok: true, message: res.message, data: res };
+    return { ok: false, message: "Clone quyền thất bại." };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleCloneUserPermissions]", err);
+    return { ok: false, message: "Không thể clone quyền giữa hai nhân viên." };
+  }
+}
+
+export async function handleGetUserPermissionConflicts(userId, setConflicts) {
+  if (!userId) {
+    setConflicts(null);
+    return { ok: false, message: "Thiếu user." };
+  }
+  try {
+    const res = await getUserPermissionConflicts(userId);
+    setConflicts(res || null);
+    return { ok: true, data: res };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleGetUserPermissionConflicts]", err);
+    setConflicts(null);
+    return { ok: false, message: "Không tải được cảnh báo xung đột quyền." };
+  }
+}
+
+export async function handleGetPermissionAuditLogs(filters, setLogs) {
+  try {
+    const logs = await getPermissionAuditLogs(filters || {});
+    setLogs(Array.isArray(logs) ? logs : []);
+    return { ok: true };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleGetPermissionAuditLogs]", err);
+    setLogs([]);
+    return { ok: false, message: "Không tải được lịch sử thay đổi quyền." };
+  }
+}
+
+export async function handleUndoLastPermissionChange(payload) {
+  try {
+    const res = await undoLastPermissionChange(payload || {});
+    if (res?.message) return { ok: true, message: res.message, data: res };
+    return { ok: false, message: "Hoàn tác thay đổi quyền thất bại." };
+  } catch (err) {
+    console.error("[AdminPermissionController.handleUndoLastPermissionChange]", err);
+    return { ok: false, message: "Không thể hoàn tác thay đổi quyền gần nhất." };
   }
 }

@@ -4,6 +4,7 @@ using DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
 {
@@ -14,12 +15,18 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
         private readonly DACNDbContext _db;
         private readonly ICodeGenerator _code;
         private readonly PricingService _pricing;
+        private readonly IHoSoTrangThaiService _status;
 
-        public HoaDonController(DACNDbContext db, ICodeGenerator code, PricingService pricing)
+        public HoaDonController(
+            DACNDbContext db,
+            ICodeGenerator code,
+            PricingService pricing,
+            IHoSoTrangThaiService status)
         {
             _db = db;
             _code = code;
             _pricing = pricing;
+            _status = status;
         }
 
         // ===========================================================
@@ -39,26 +46,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             if (hoaDon == null)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            var result = new HoaDonDetailDto
-            {
-                Id = hoaDon.Id,
-                MaHd = hoaDon.MaHd,
-                LoaiHoaDon = hoaDon.LoaiHoaDon,
-                TongTien = hoaDon.TongTien,
-                TrangThai = hoaDon.TrangThai,
-                NgayTao = hoaDon.NgayTao,
-                NgayThanhToan = hoaDon.NgayThanhToan,
-                BenhNhan = hoaDon.IdBenhNhanNavigation?.HoTen,
-                ChiTiet = hoaDon.ChiTietHoaDons.Select(c => new HoaDonItemDto
-                {
-                    MoTa = c.MoTa,
-                    SoLuong = c.SoLuong,
-                    DonGia = c.DonGia,
-                    ThanhTien = c.ThanhTien
-                }).ToList()
-            };
-
-            return Ok(result);
+            return Ok(await BuildHoaDonDetailDtoAsync(hoaDon));
         }
 
         // ===========================================================
@@ -79,54 +67,17 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             if (!string.IsNullOrEmpty(loai))
                 query = query.Where(h => h.LoaiHoaDon == loai.ToUpper());
 
-            var rawData = await (
-                from h in query
-                join b in _db.BenhNhans on h.IdBenhNhan equals b.Id
-                join lk in _db.LanKhams on b.Id equals lk.IdBenhNhan into lkGroup
-                from lk in lkGroup.DefaultIfEmpty()
-                join pk in _db.PhongKhams on lk.IdPhong equals pk.Id into pkJoin
-                from pk in pkJoin.DefaultIfEmpty()
-                select new
-                {
-                    BenhNhanId = b.Id,
-                    HoTen = b.HoTen,
-                    SoDienThoai = b.SoDienThoai,
-                    MaHoaDon = h.MaHd,
-                    TongTien = h.TongTien,
-                    TrangThai = h.TrangThai,
-                    NgayTao = h.NgayTao,
-                    LoaiHoaDon = h.LoaiHoaDon,
-                    TenPhong = pk != null ? pk.TenPhong : "(Chưa xác định)"
-                }
-            ).ToListAsync();
+            var bills = await query
+                .Include(h => h.ChiTietHoaDons)
+                .Include(h => h.IdBenhNhanNavigation)
+                .OrderByDescending(h => h.NgayTao)
+                .ToListAsync();
 
-            var data = rawData
-                .GroupBy(x => new
-                {
-                    x.BenhNhanId,
-                    x.HoTen,
-                    x.SoDienThoai,
-                    x.MaHoaDon,
-                    x.TongTien,
-                    x.TrangThai,
-                    x.NgayTao,
-                    x.LoaiHoaDon
-                })
-                .Select(g => new
-                {
-                    g.Key.BenhNhanId,
-                    g.Key.HoTen,
-                    g.Key.SoDienThoai,
-                    g.Key.MaHoaDon,
-                    g.Key.TongTien,
-                    g.Key.TrangThai,
-                    g.Key.NgayTao,
-                    g.Key.LoaiHoaDon,
-                    PhongKham = string.Join(", ",
-                        g.Select(x => x.TenPhong).Where(t => !string.IsNullOrEmpty(t)).Distinct())
-                })
-                .OrderByDescending(x => x.NgayTao)
-                .ToList();
+            var data = new List<HoaDonListDto>();
+            foreach (var bill in bills)
+            {
+                data.Add(await BuildHoaDonListDtoAsync(bill));
+            }
 
             if (data.Count == 0)
                 return Ok(new { Message = "Không có bệnh nhân nào đang chờ thanh toán." });
@@ -147,19 +98,17 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             if (tuNgay.HasValue) query = query.Where(h => h.NgayTao >= tuNgay.Value);
             if (denNgay.HasValue) query = query.Where(h => h.NgayTao <= denNgay.Value);
 
-            var result = await query
+            var bills = await query
+                .Include(h => h.ChiTietHoaDons)
+                .Include(h => h.IdBenhNhanNavigation)
                 .OrderByDescending(h => h.NgayTao)
-                .Select(h => new HoaDonListDto
-                {
-                    Id = h.Id,
-                    MaHd = h.MaHd,
-                    LoaiHoaDon = h.LoaiHoaDon,
-                    BenhNhan = h.IdBenhNhanNavigation != null ? h.IdBenhNhanNavigation.HoTen : "",
-                    TongTien = h.TongTien,
-                    NgayTao = h.NgayTao,
-                    TrangThai = h.TrangThai
-                })
                 .ToListAsync();
+
+            var result = new List<HoaDonListDto>();
+            foreach (var bill in bills)
+            {
+                result.Add(await BuildHoaDonListDtoAsync(bill));
+            }
 
             return Ok(result);
         }
@@ -180,26 +129,9 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                 .Where(ct => ct.IdHoaDon == id)
                 .ToListAsync();
 
-            var result = new HoaDonDetailDto
-            {
-                Id = hoaDon.Id,
-                MaHd = hoaDon.MaHd,
-                LoaiHoaDon = hoaDon.LoaiHoaDon,
-                TongTien = hoaDon.TongTien,
-                TrangThai = hoaDon.TrangThai,
-                NgayTao = hoaDon.NgayTao,
-                NgayThanhToan = hoaDon.NgayThanhToan,
-                BenhNhan = hoaDon.IdBenhNhanNavigation?.HoTen,
-                ChiTiet = chiTiet.Select(c => new HoaDonItemDto
-                {
-                    MoTa = c.MoTa,
-                    SoLuong = c.SoLuong,
-                    DonGia = c.DonGia,
-                    ThanhTien = c.ThanhTien
-                }).ToList()
-            };
+            hoaDon.ChiTietHoaDons = chiTiet;
 
-            return Ok(result);
+            return Ok(await BuildHoaDonDetailDtoAsync(hoaDon));
         }
 
         // ===========================================================
@@ -214,15 +146,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             if (hd == null)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            if (hd.TrangThai == "DA_THANH_TOAN")
-                return BadRequest("Hóa đơn này đã được thanh toán rồi.");
-
-            hd.TrangThai = "DA_THANH_TOAN";
-            hd.IdThuNgan = idThuNgan;
-            hd.NgayThanhToan = DateTime.Now;
-
-            await _db.SaveChangesAsync();
-            return Ok(new { Message = "✅ Thanh toán thành công!", hd.MaHd });
+            return await ConfirmPaymentCoreAsync(hd, idThuNgan, null);
         }
 
         // ✅ Xác nhận thanh toán bằng MÃ HÓA ĐƠN (chuỗi)
@@ -239,15 +163,239 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             if (hd == null)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            if (hd.TrangThai == "DA_THANH_TOAN")
+            return await ConfirmPaymentCoreAsync(hd, req.IdThuNgan, req.HinhThucThanhToan);
+        }
+
+        private async Task<IActionResult> ConfirmPaymentCoreAsync(HoaDon hd, long idThuNgan, string? paymentMethod)
+        {
+            if (idThuNgan <= 0)
+                return BadRequest("Thiếu idThuNgan hợp lệ.");
+
+            if (string.Equals(hd.TrangThai, "DA_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
                 return BadRequest("Hóa đơn này đã được thanh toán rồi.");
 
+            var now = DateTime.Now;
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
             hd.TrangThai = "DA_THANH_TOAN";
-            hd.IdThuNgan = req.IdThuNgan;
-            hd.NgayThanhToan = DateTime.Now;
+            hd.IdThuNgan = idThuNgan;
+            hd.NgayThanhToan = now;
+            hd.HinhThucTt = NormalizePaymentMethod(paymentMethod);
+
+            var postProcess = await CompleteServiceOrderAfterPaymentAsync(hd, idThuNgan, now);
+            if (!postProcess.Success)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new
+                {
+                    state = postProcess.State,
+                    message = postProcess.ErrorMessage,
+                    invalidServices = postProcess.InvalidServices
+                });
+            }
 
             await _db.SaveChangesAsync();
-            return Ok(new { Message = "✅ Thanh toán thành công!", hd.MaHd });
+            await tx.CommitAsync();
+
+            return Ok(new
+            {
+                Message = "Thanh toán thành công!",
+                hd.MaHd,
+                queueCreated = postProcess.QueueCreated,
+                queueTicketCount = postProcess.QueueTicketCount,
+                encounterId = postProcess.EncounterId,
+                encounterStatus = postProcess.EncounterStatus
+            });
+        }
+
+        private async Task<PaymentPostProcessResult> CompleteServiceOrderAfterPaymentAsync(HoaDon hd, long actorId, DateTime now)
+        {
+            if (!IsServiceOrder(hd))
+                return PaymentPostProcessResult.Ok(false, 0);
+
+            var order = await _db.HoaDons
+                .Include(h => h.ChiTietHoaDons)
+                .Include(h => h.IdLanKhamNavigation)
+                    .ThenInclude(l => l!.IdHoSoNavigation)
+                        .ThenInclude(hs => hs!.IdKhuTiepDonNavigation)
+                .FirstOrDefaultAsync(h => h.Id == hd.Id);
+
+            var baseVisit = order?.IdLanKhamNavigation;
+            var encounter = baseVisit?.IdHoSoNavigation;
+            if (order == null || baseVisit == null || encounter == null)
+            {
+                return PaymentPostProcessResult.Fail(
+                    "SERVICE_ORDER_ENCOUNTER_MISSING",
+                    "Phiếu dịch vụ chưa gắn được hồ sơ tiếp đón, không thể tạo hàng đợi sau thanh toán.");
+            }
+
+            if (!encounter.IdKhuTiepDon.HasValue)
+            {
+                return PaymentPostProcessResult.Fail(
+                    "ENCOUNTER_AREA_MISSING",
+                    "Hồ sơ chưa có khu tiếp đón. Vui lòng cập nhật khu tiếp đón trước khi thanh toán.");
+            }
+
+            var lines = await ResolveServiceOrderLinesAsync(order, encounter.IdKhuTiepDon.Value);
+            if (lines.Count == 0)
+            {
+                return PaymentPostProcessResult.Fail(
+                    "SERVICE_ORDER_EMPTY",
+                    "Phiếu dịch vụ chưa có dòng dịch vụ hợp lệ để tạo hàng đợi.");
+            }
+
+            var invalidLines = lines.Where(x => !x.KhuHopLe).ToList();
+            if (invalidLines.Count > 0)
+            {
+                return PaymentPostProcessResult.Fail(
+                    invalidLines.Any(x => x.Reason == "ROOM_AREA_MISSING") ? "ROOM_AREA_MISSING" : "SERVICE_AREA_MISMATCH",
+                    "Có dịch vụ/phòng không thuộc khu tiếp đón của hồ sơ. Vui lòng kiểm tra lại trước khi thanh toán.",
+                    invalidLines.Select(x => new
+                    {
+                        serviceId = x.ServiceId,
+                        serviceCode = x.ServiceCode,
+                        serviceName = x.ServiceName,
+                        roomId = x.RoomId,
+                        roomName = x.RoomName,
+                        roomAreaId = x.RoomAreaId,
+                        roomAreaCode = x.RoomAreaCode,
+                        roomAreaName = x.RoomAreaName,
+                        reason = x.Reason
+                    }).Cast<object>().ToList());
+            }
+
+            var normalizedEncounterStatus = _status.NormalizeStatus(encounter.TrangThai);
+            if (string.Equals(normalizedEncounterStatus, HoSoTrangThaiService.ChoThanhToan, StringComparison.OrdinalIgnoreCase))
+            {
+                var paidTransition = _status.ApplyTransition(
+                    encounter,
+                    HoSoTrangThaiService.DaThanhToan,
+                    actorId,
+                    "PAYMENT_CONFIRMED",
+                    $"Thanh toán phiếu {order.MaHd}",
+                    new
+                    {
+                        orderCode = order.MaHd,
+                        paymentMethod = hd.HinhThucTt,
+                        total = hd.TongTien
+                    });
+
+                if (!paidTransition.Success)
+                    return PaymentPostProcessResult.Fail("STATUS_TRANSITION_FAILED", paidTransition.ErrorMessage ?? "Không cập nhật được trạng thái hồ sơ sau thanh toán.");
+            }
+            else if (!string.Equals(normalizedEncounterStatus, HoSoTrangThaiService.DaThanhToan, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(normalizedEncounterStatus, HoSoTrangThaiService.ChoKham, StringComparison.OrdinalIgnoreCase))
+            {
+                return PaymentPostProcessResult.Fail(
+                    "ENCOUNTER_STATUS_INVALID",
+                    $"Hồ sơ đang ở trạng thái '{normalizedEncounterStatus}', không thể xác nhận thanh toán phiếu dịch vụ.");
+            }
+
+            normalizedEncounterStatus = _status.NormalizeStatus(encounter.TrangThai);
+            if (string.Equals(normalizedEncounterStatus, HoSoTrangThaiService.DaThanhToan, StringComparison.OrdinalIgnoreCase))
+            {
+                var queueTransition = _status.ApplyTransition(
+                    encounter,
+                    HoSoTrangThaiService.ChoKham,
+                    actorId,
+                    "QUEUE_READY_AFTER_PAYMENT",
+                    $"Đã thanh toán phiếu {order.MaHd}, chuyển sang chờ khám.",
+                    new
+                    {
+                        orderCode = order.MaHd,
+                        serviceCount = lines.Count,
+                        paymentMethod = hd.HinhThucTt
+                    });
+
+                if (!queueTransition.Success)
+                    return PaymentPostProcessResult.Fail("STATUS_TRANSITION_FAILED", queueTransition.ErrorMessage ?? "Không chuyển được hồ sơ sang chờ khám.");
+            }
+
+            var createdTickets = 0;
+            foreach (var line in lines)
+            {
+                var queueVisit = await _db.LanKhams
+                    .Where(l =>
+                        l.IdHoSo == encounter.Id &&
+                        l.IdPhong == line.RoomId &&
+                        l.TrangThai != "DA_HUY")
+                    .OrderByDescending(l => l.CreatedAt ?? l.ThoiGianBatDau)
+                    .FirstOrDefaultAsync();
+
+                if (queueVisit == null)
+                {
+                    var assignedDoctor = await _db.BacSiPhongs
+                        .Where(x => x.IdPhong == line.RoomId)
+                        .Select(x => (long?)x.IdBacSi)
+                        .FirstOrDefaultAsync();
+
+                    queueVisit = new LanKham
+                    {
+                        IdHoSo = encounter.Id,
+                        IdBenhNhan = encounter.IdBenhNhan,
+                        IdPhong = line.RoomId,
+                        IdBacSi = assignedDoctor,
+                        TrangThai = "CHO_KHAM",
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        ThoiGianBatDau = now,
+                        LyDo = "DANG_KY_DICH_VU",
+                        IdTiepDon = actorId
+                    };
+                    _db.LanKhams.Add(queueVisit);
+                    await _db.SaveChangesAsync();
+                }
+                else if (string.IsNullOrWhiteSpace(queueVisit.TrangThai)
+                    || string.Equals(queueVisit.TrangThai, "TIEP_DON", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(queueVisit.TrangThai, "DA_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
+                {
+                    queueVisit.TrangThai = "CHO_KHAM";
+                    queueVisit.UpdatedAt = now;
+                }
+
+                var duplicateLine = await _db.LanKhamDichVus.AnyAsync(x =>
+                    x.IdLanKham == queueVisit.Id &&
+                    x.IdDichVu == line.ServiceId &&
+                    x.TrangThaiThucHien != "DA_HUY");
+                if (duplicateLine) continue;
+
+                _db.LanKhamDichVus.Add(new LanKhamDichVu
+                {
+                    IdLanKham = queueVisit.Id,
+                    IdDichVu = line.ServiceId,
+                    SoLuong = 1,
+                    DonGia = line.UnitPrice,
+                    TrangThaiThucHien = "CHO_THUC_HIEN",
+                    GhiChu = $"PDV:{order.MaHd}"
+                });
+                createdTickets++;
+            }
+
+            _db.TiepDonTrangThaiLogs.Add(new TiepDonTrangThaiLog
+            {
+                IdHoSo = encounter.Id,
+                FromTrangThai = _status.NormalizeStatus(encounter.TrangThai),
+                ToTrangThai = _status.NormalizeStatus(encounter.TrangThai),
+                Action = "QUEUE_TICKETS_CREATED_AFTER_PAYMENT",
+                Note = "Đã tạo hàng đợi khám sau khi thu ngân xác nhận thanh toán.",
+                IdNguoiDung = actorId,
+                CreatedAt = now,
+                Metadata = JsonSerializer.Serialize(new
+                {
+                    orderCode = order.MaHd,
+                    createdTickets,
+                    serviceCount = lines.Count,
+                    areaId = encounter.IdKhuTiepDon,
+                    areaCode = encounter.IdKhuTiepDonNavigation?.MaKhu,
+                    rooms = lines.Select(x => new { x.RoomId, x.RoomName, x.RoomAreaId }).Distinct()
+                })
+            });
+
+            return PaymentPostProcessResult.Ok(
+                queueCreated: lines.Count > 0,
+                queueTicketCount: createdTickets,
+                encounterId: encounter.Id,
+                encounterStatus: _status.NormalizeStatus(encounter.TrangThai));
         }
 
         // ===========================================================
@@ -257,33 +405,54 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
         public async Task<IActionResult> PrintReceipt(long id)
         {
             var hoaDon = await _db.HoaDons
+                .Include(h => h.ChiTietHoaDons)
                 .Include(h => h.IdBenhNhanNavigation)
                 .FirstOrDefaultAsync(h => h.Id == id);
 
             if (hoaDon == null) return NotFound("Không tìm thấy hóa đơn.");
 
-            var chiTiet = await _db.ChiTietHoaDons
-                .Where(ct => ct.IdHoaDon == id)
-                .ToListAsync();
+            return Ok(await BuildReceiptPayloadAsync(hoaDon));
+        }
 
-            var data = new
+        [HttpGet("phieu-thu/ma/{maHd}")]
+        public async Task<IActionResult> PrintReceiptByCode(string maHd)
+        {
+            var hoaDon = await _db.HoaDons
+                .Include(h => h.ChiTietHoaDons)
+                .Include(h => h.IdBenhNhanNavigation)
+                .FirstOrDefaultAsync(h => h.MaHd == maHd);
+
+            if (hoaDon == null) return NotFound("Không tìm thấy hóa đơn.");
+
+            return Ok(await BuildReceiptPayloadAsync(hoaDon));
+        }
+
+        private async Task<object> BuildReceiptPayloadAsync(HoaDon hoaDon)
+        {
+            var detail = await BuildHoaDonDetailDtoAsync(hoaDon);
+
+            return new
             {
-                hoaDon.MaHd,
-                TenBenhNhan = hoaDon.IdBenhNhanNavigation?.HoTen,
-                NgayThu = hoaDon.NgayThanhToan,
-                LoaiHoaDon = hoaDon.LoaiHoaDon,
-                TongTien = hoaDon.TongTien,
-                ChiTiet = chiTiet.Select(x => new
+                detail.MaHd,
+                TenBenhNhan = detail.BenhNhan,
+                detail.NgayThanhToan,
+                NgayThu = detail.NgayThanhToan,
+                detail.LoaiHoaDon,
+                detail.TongTien,
+                KhuTiepDon = detail.TenKhuTiepDon,
+                PhongKham = detail.PhongKham,
+                ChiTiet = detail.ChiTiet.Select(x => new
                 {
                     x.MoTa,
+                    x.TenPhong,
+                    x.TenKhuTiepDon,
                     x.SoLuong,
                     x.DonGia,
                     x.ThanhTien
                 })
             };
-
-            return Ok(data);
         }
+
         [HttpPost("fix-dvkt-invoices")]
         public async Task<IActionResult> FixDvktInvoices()
         {
@@ -502,6 +671,389 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
 
             await _db.SaveChangesAsync();
             return Ok(new { Message = "✅ Tạo hóa đơn thuốc thành công", hd.MaHd, hd.TongTien, hd.Id });
+        }
+
+        private async Task<HoaDonListDto> BuildHoaDonListDtoAsync(HoaDon hoaDon)
+        {
+            var detail = await BuildHoaDonDetailDtoAsync(hoaDon);
+            return new HoaDonListDto
+            {
+                Id = detail.Id,
+                MaHd = detail.MaHd,
+                LoaiHoaDon = detail.LoaiHoaDon,
+                BenhNhan = detail.BenhNhan,
+                IdBenhNhan = detail.IdBenhNhan,
+                SoDienThoai = detail.SoDienThoai,
+                IdHoSo = detail.IdHoSo,
+                IdKhuTiepDon = detail.IdKhuTiepDon,
+                MaKhuTiepDon = detail.MaKhuTiepDon,
+                TenKhuTiepDon = detail.TenKhuTiepDon,
+                PhongKham = detail.PhongKham,
+                CanThanhToan = detail.CanThanhToan,
+                LyDoKhongThanhToan = detail.LyDoKhongThanhToan,
+                QueueCreated = detail.QueueCreated,
+                TongTien = detail.TongTien,
+                NgayTao = detail.NgayTao,
+                TrangThai = detail.TrangThai
+            };
+        }
+
+        private async Task<HoaDonDetailDto> BuildHoaDonDetailDtoAsync(HoaDon hoaDon)
+        {
+            if (hoaDon.ChiTietHoaDons.Count == 0)
+            {
+                await _db.Entry(hoaDon).Collection(h => h.ChiTietHoaDons).LoadAsync();
+            }
+
+            var area = await GetBillAreaContextAsync(hoaDon);
+            var items = await BuildHoaDonItemsAsync(hoaDon, area);
+            var isServiceOrder = IsServiceOrder(hoaDon);
+            var invalidItem = items.FirstOrDefault(x => !x.KhuHopLe);
+            var canPay = !isServiceOrder || (area.IdKhuTiepDon.HasValue && invalidItem == null);
+            var phongKham = string.Join(", ",
+                items.Select(x => x.TenPhong)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct());
+
+            return new HoaDonDetailDto
+            {
+                Id = hoaDon.Id,
+                MaHd = hoaDon.MaHd,
+                LoaiHoaDon = hoaDon.LoaiHoaDon,
+                TongTien = hoaDon.TongTien,
+                TrangThai = hoaDon.TrangThai,
+                NgayTao = hoaDon.NgayTao,
+                NgayThanhToan = hoaDon.NgayThanhToan,
+                BenhNhan = RepairInvoiceText(hoaDon.IdBenhNhanNavigation?.HoTen),
+                IdBenhNhan = hoaDon.IdBenhNhan,
+                SoDienThoai = hoaDon.IdBenhNhanNavigation?.SoDienThoai,
+                IdHoSo = area.IdHoSo,
+                IdKhuTiepDon = area.IdKhuTiepDon,
+                MaKhuTiepDon = RepairInvoiceText(area.MaKhuTiepDon),
+                TenKhuTiepDon = RepairInvoiceText(area.TenKhuTiepDon),
+                PhongKham = phongKham,
+                CanThanhToan = canPay,
+                LyDoKhongThanhToan = canPay
+                    ? null
+                    : !area.IdKhuTiepDon.HasValue
+                        ? "Hồ sơ chưa có khu tiếp đón."
+                        : RepairInvoiceText(invalidItem?.LyDoKhongHopLe),
+                QueueCreated = await HasQueueForBillAsync(hoaDon),
+                ChiTiet = items
+            };
+        }
+
+        private async Task<BillAreaContext> GetBillAreaContextAsync(HoaDon hoaDon)
+        {
+            if (!hoaDon.IdLanKham.HasValue)
+                return new BillAreaContext();
+
+            var visit = await _db.LanKhams
+                .AsNoTracking()
+                .Include(l => l.IdHoSoNavigation)
+                    .ThenInclude(h => h!.IdKhuTiepDonNavigation)
+                .FirstOrDefaultAsync(l => l.Id == hoaDon.IdLanKham.Value);
+
+            var encounter = visit?.IdHoSoNavigation;
+            return new BillAreaContext
+            {
+                IdHoSo = encounter?.Id,
+                IdKhuTiepDon = encounter?.IdKhuTiepDon,
+                MaKhuTiepDon = encounter?.IdKhuTiepDonNavigation?.MaKhu,
+                TenKhuTiepDon = encounter?.IdKhuTiepDonNavigation?.TenKhu
+            };
+        }
+
+        private async Task<List<HoaDonItemDto>> BuildHoaDonItemsAsync(HoaDon hoaDon, BillAreaContext area)
+        {
+            var details = hoaDon.ChiTietHoaDons.ToList();
+            var serviceIds = details
+                .Where(IsServiceOrderLine)
+                .Select(x => x.IdThamChieu ?? TryReadJsonLong(x.MoTa, "serviceId"))
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .Distinct()
+                .ToList();
+
+            var serviceLookup = serviceIds.Count == 0
+                ? new Dictionary<long, DichVu>()
+                : await _db.DichVus
+                    .AsNoTracking()
+                    .Include(d => d.IdPhongNavigation)
+                        .ThenInclude(p => p!.IdKhuTiepDonNavigation)
+                    .Where(d => serviceIds.Contains(d.Id))
+                    .ToDictionaryAsync(d => d.Id);
+
+            var items = new List<HoaDonItemDto>();
+            foreach (var ct in details)
+            {
+                var isServiceLine = IsServiceOrderLine(ct);
+                var serviceId = isServiceLine
+                    ? ct.IdThamChieu ?? TryReadJsonLong(ct.MoTa, "serviceId")
+                    : ct.IdThamChieu;
+
+                serviceLookup.TryGetValue(serviceId ?? 0, out var service);
+                var room = service?.IdPhongNavigation;
+                var roomArea = room?.IdKhuTiepDonNavigation;
+
+                var roomId = room?.Id ?? (int?)TryReadJsonLong(ct.MoTa, "roomId");
+                var roomAreaId = room?.IdKhuTiepDon ?? (int?)TryReadJsonLong(ct.MoTa, "roomAreaId");
+                var roomName = room?.TenPhong ?? TryReadJsonString(ct.MoTa, "roomName");
+                var serviceName = service?.Ten ?? TryReadJsonString(ct.MoTa, "serviceName");
+                var serviceCode = service?.Ma ?? TryReadJsonString(ct.MoTa, "serviceCode");
+                var roomAreaCode = roomArea?.MaKhu ?? TryReadJsonString(ct.MoTa, "roomAreaCode");
+                var roomAreaName = roomArea?.TenKhu ?? TryReadJsonString(ct.MoTa, "roomAreaName");
+
+                var khuHopLe = true;
+                string? lyDoKhongHopLe = null;
+                if (isServiceLine && area.IdKhuTiepDon.HasValue)
+                {
+                    if (!roomAreaId.HasValue)
+                    {
+                        khuHopLe = false;
+                        lyDoKhongHopLe = "Phòng chưa được map khu tiếp đón.";
+                    }
+                    else if (roomAreaId.Value != area.IdKhuTiepDon.Value)
+                    {
+                        khuHopLe = false;
+                        lyDoKhongHopLe = "Phòng thuộc khu khác với khu tiếp đón của hồ sơ.";
+                    }
+                }
+
+                items.Add(new HoaDonItemDto
+                {
+                    MoTa = RepairInvoiceText(serviceName ?? ct.MoTa),
+                    IdDichVu = serviceId,
+                    MaDichVu = RepairInvoiceText(serviceCode),
+                    TenDichVu = RepairInvoiceText(serviceName),
+                    IdPhong = roomId,
+                    TenPhong = RepairInvoiceText(roomName),
+                    IdKhuTiepDon = roomAreaId,
+                    MaKhuTiepDon = RepairInvoiceText(roomAreaCode),
+                    TenKhuTiepDon = RepairInvoiceText(roomAreaName),
+                    KhuHopLe = khuHopLe,
+                    LyDoKhongHopLe = RepairInvoiceText(lyDoKhongHopLe),
+                    SoLuong = ct.SoLuong,
+                    DonGia = ct.DonGia,
+                    ThanhTien = ct.ThanhTien
+                });
+            }
+
+            return items;
+        }
+
+        private async Task<List<ResolvedServiceOrderLine>> ResolveServiceOrderLinesAsync(HoaDon order, int encounterAreaId)
+        {
+            var details = order.ChiTietHoaDons
+                .Where(IsServiceOrderLine)
+                .ToList();
+
+            var serviceIds = details
+                .Select(x => x.IdThamChieu ?? TryReadJsonLong(x.MoTa, "serviceId"))
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .Distinct()
+                .ToList();
+
+            var serviceLookup = serviceIds.Count == 0
+                ? new Dictionary<long, DichVu>()
+                : await _db.DichVus
+                    .Include(d => d.IdPhongNavigation)
+                        .ThenInclude(p => p!.IdKhuTiepDonNavigation)
+                    .Where(d => serviceIds.Contains(d.Id))
+                    .ToDictionaryAsync(d => d.Id);
+
+            var lines = new List<ResolvedServiceOrderLine>();
+            foreach (var detail in details)
+            {
+                var serviceId = detail.IdThamChieu ?? TryReadJsonLong(detail.MoTa, "serviceId");
+                serviceLookup.TryGetValue(serviceId ?? 0, out var service);
+
+                var room = service?.IdPhongNavigation;
+                var roomArea = room?.IdKhuTiepDonNavigation;
+                var roomId = room?.Id ?? (int?)TryReadJsonLong(detail.MoTa, "roomId");
+                var roomAreaId = room?.IdKhuTiepDon ?? (int?)TryReadJsonLong(detail.MoTa, "roomAreaId");
+
+                string? reason = null;
+                if (!serviceId.HasValue || service == null)
+                    reason = "SERVICE_NOT_FOUND";
+                else if (!roomId.HasValue)
+                    reason = "ROOM_MISSING";
+                else if (!roomAreaId.HasValue)
+                    reason = "ROOM_AREA_MISSING";
+                else if (roomAreaId.Value != encounterAreaId)
+                    reason = "ROOM_AREA_MISMATCH";
+
+                lines.Add(new ResolvedServiceOrderLine
+                {
+                    ServiceId = serviceId ?? 0,
+                    ServiceCode = service?.Ma ?? TryReadJsonString(detail.MoTa, "serviceCode"),
+                    ServiceName = service?.Ten ?? TryReadJsonString(detail.MoTa, "serviceName"),
+                    RoomId = roomId ?? 0,
+                    RoomName = room?.TenPhong ?? TryReadJsonString(detail.MoTa, "roomName"),
+                    RoomAreaId = roomAreaId,
+                    RoomAreaCode = roomArea?.MaKhu ?? TryReadJsonString(detail.MoTa, "roomAreaCode"),
+                    RoomAreaName = roomArea?.TenKhu ?? TryReadJsonString(detail.MoTa, "roomAreaName"),
+                    UnitPrice = detail.DonGia ?? 0m,
+                    KhuHopLe = reason == null,
+                    Reason = reason
+                });
+            }
+
+            return lines;
+        }
+
+        private async Task<bool> HasQueueForBillAsync(HoaDon hoaDon)
+        {
+            if (!IsServiceOrder(hoaDon) || string.IsNullOrWhiteSpace(hoaDon.MaHd))
+                return false;
+
+            var marker = $"PDV:{hoaDon.MaHd}";
+            return await _db.LanKhamDichVus
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.GhiChu != null &&
+                    x.GhiChu.Contains(marker) &&
+                    x.TrangThaiThucHien != "DA_HUY");
+        }
+
+        private static bool IsServiceOrder(HoaDon hoaDon) =>
+            string.Equals(hoaDon.LoaiHoaDon, "DANG_KY_DICH_VU", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsServiceOrderLine(ChiTietHoaDon detail) =>
+            string.Equals(detail.LoaiThamChieu, "SERVICE_ORDER_LINE", StringComparison.OrdinalIgnoreCase);
+
+        private static string NormalizePaymentMethod(string? paymentMethod)
+        {
+            var normalized = (paymentMethod ?? string.Empty).Trim().ToUpperInvariant();
+            return string.IsNullOrWhiteSpace(normalized) ? "TIEN_MAT" : normalized;
+        }
+
+        private static string? TryReadJsonString(string? raw, string propertyName)
+        {
+            if (string.IsNullOrWhiteSpace(raw) || !raw.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                return doc.RootElement.TryGetProperty(propertyName, out var value)
+                    ? value.GetString()
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static long? TryReadJsonLong(string? raw, string propertyName)
+        {
+            if (string.IsNullOrWhiteSpace(raw) || !raw.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (!doc.RootElement.TryGetProperty(propertyName, out var value))
+                    return null;
+
+                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number))
+                    return number;
+
+                if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out var parsed))
+                    return parsed;
+            }
+            catch
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private static string? RepairInvoiceText(string? value)
+        {
+            var text = TextEncodingRepair.Repair(value);
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            return text
+                .Replace("Nguy?n", "Nguyễn")
+                .Replace("Khám t?i ph?ng", "Khám tại phòng")
+                .Replace("Khám t?i phòng", "Khám tại phòng")
+                .Replace("Khám tại ph?ng", "Khám tại phòng")
+                .Replace("Khám t?i Ph?ng", "Khám tại Phòng")
+                .Replace("Ph?ng khám", "Phòng khám")
+                .Replace("N?i t?ng quát", "Nội tổng quát")
+                .Replace("Ngo?i th?n kinh", "Ngoại thần kinh")
+                .Replace("Tai M?i H?ng", "Tai Mũi Họng")
+                .Replace("Da Li?u", "Da Liễu")
+                .Replace("N?i Ti?t", "Nội Tiết")
+                .Replace("Răng Hàm M?t", "Răng Hàm Mặt")
+                .Replace("S?n Ph? khoa", "Sản Phụ khoa")
+                .Replace("Ki?m tra máu t?ng quát", "Kiểm tra máu tổng quát");
+        }
+
+        private sealed class BillAreaContext
+        {
+            public long? IdHoSo { get; init; }
+            public int? IdKhuTiepDon { get; init; }
+            public string? MaKhuTiepDon { get; init; }
+            public string? TenKhuTiepDon { get; init; }
+        }
+
+        private sealed class ResolvedServiceOrderLine
+        {
+            public long ServiceId { get; init; }
+            public string? ServiceCode { get; init; }
+            public string? ServiceName { get; init; }
+            public int RoomId { get; init; }
+            public string? RoomName { get; init; }
+            public int? RoomAreaId { get; init; }
+            public string? RoomAreaCode { get; init; }
+            public string? RoomAreaName { get; init; }
+            public decimal UnitPrice { get; init; }
+            public bool KhuHopLe { get; init; }
+            public string? Reason { get; init; }
+        }
+
+        private sealed class PaymentPostProcessResult
+        {
+            public bool Success { get; init; }
+            public string? State { get; init; }
+            public string? ErrorMessage { get; init; }
+            public bool QueueCreated { get; init; }
+            public int QueueTicketCount { get; init; }
+            public long? EncounterId { get; init; }
+            public string? EncounterStatus { get; init; }
+            public List<object> InvalidServices { get; init; } = new();
+
+            public static PaymentPostProcessResult Ok(
+                bool queueCreated,
+                int queueTicketCount,
+                long? encounterId = null,
+                string? encounterStatus = null) =>
+                new()
+                {
+                    Success = true,
+                    QueueCreated = queueCreated,
+                    QueueTicketCount = queueTicketCount,
+                    EncounterId = encounterId,
+                    EncounterStatus = encounterStatus
+                };
+
+            public static PaymentPostProcessResult Fail(
+                string state,
+                string message,
+                List<object>? invalidServices = null) =>
+                new()
+                {
+                    Success = false,
+                    State = state,
+                    ErrorMessage = message,
+                    InvalidServices = invalidServices ?? new List<object>()
+                };
         }
     }
 }

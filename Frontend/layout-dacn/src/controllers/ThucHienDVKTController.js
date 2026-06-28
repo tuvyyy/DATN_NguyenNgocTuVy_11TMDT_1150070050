@@ -1,198 +1,117 @@
+import Swal from "sweetalert2";
 import {
-  getPendingDVKT,
-  getProcessingDVKT,
-  getDoneDVKT,
-  nhanDVKT,
-  huyNhanDVKT,
-  saveKetQuaTong,
-  saveKetQuaChiTiet,
-  hoanThanhDVKT,
-  getLogsDVKT,
-  fetchFullKetQua,
-  approveKetQua,
-  cancelApproveKetQua,
-  sendKetQua,
-  exportPdfDVKT ,
+  approveKetQua, cancelApproveKetQua, exportPdfDVKT, fetchFullKetQua,
+  getDoneDVKT, getLogsDVKT, getPendingDVKT, getProcessingDVKT,
+  hoanThanhDVKT, huyNhanDVKT, nhanDVKT, saveKetQuaChiTiet,
+  saveKetQuaTong, sendKetQua,
 } from "../api/ThucHienDVKTApi";
 
-import Swal from "sweetalert2";
+const errorMessage = (error, fallback) => error?.response?.data?.message || error?.response?.data || error?.message || fallback;
 
-
-export const handleExportPDF = async (id, refresh) => {
+export const handleExportPDF = async (id) => {
   try {
     const blob = await exportPdfDVKT(id);
     const url = window.URL.createObjectURL(blob);
     window.open(url, "_blank");
-  } catch (err) {
-    console.log("PDF err:", err);
-    Swal.fire("Lỗi", "Không thể xuất PDF", "error");
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    Swal.fire("Không thể xuất PDF", errorMessage(error, "Vui lòng thử lại."), "error");
   }
 };
-// =============================
-// PENDING
-// =============================
+
 export const loadPending = async (setState) => {
-  setState((s) => ({ ...s, loading: true }));
+  setState((current) => ({ ...current, loading: true }));
   const data = await getPendingDVKT();
-  setState((s) => ({ ...s, pending: data, loading: false }));
+  setState((current) => ({ ...current, pending: data, loading: false }));
 };
 
-// PROCESSING
 export const loadProcessing = async (setState) => {
-  setState((s) => ({ ...s, loading: true }));
+  setState((current) => ({ ...current, loading: true }));
   const data = await getProcessingDVKT();
-  setState((s) => ({ ...s, processing: data, loading: false }));
+  setState((current) => ({ ...current, processing: data, loading: false }));
 };
 
-// =============================
-// DONE – CHUẨN DUY NHẤT
-// =============================
 export const loadDone = async (setState, from = "", to = "") => {
-  setState((s) => ({ ...s, loading: true }));
-
-  const raw = await getDoneDVKT(from, to);
-  console.log("🔥 RAW FROM BE:", raw);
-
-  const data = raw.map((x) => ({
-    ...x,
-    trangThaiKQ: x.trangThaiKQ ?? "draft",  // ⭐ LẤY TRỰC TIẾP TỪ BE
-  }));
-
-  console.log("🔥 DONE DATA FE SAU MAP:", data);
-
-  setState((s) => ({ ...s, done: data, loading: false }));
+  setState((current) => ({ ...current, loading: true }));
+  const data = (await getDoneDVKT(from, to)).map((item) => ({ ...item, trangThaiKQ: item.trangThaiKQ ?? "draft" }));
+  setState((current) => ({ ...current, done: data, loading: false }));
 };
 
-
-// =============================
-// SAVE KQ TỔNG
-// =============================
 export const handleSaveKetQuaTong = async (payload, refresh) => {
   try {
     await saveKetQuaTong(payload);
-    Swal.fire("OK", "Đã lưu kết quả tổng", "success");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể lưu", "error");
+    await refresh?.();
+    return true;
+  } catch (error) {
+    Swal.fire("Không thể lưu kết quả tổng", errorMessage(error, "Vui lòng thử lại."), "error");
+    return false;
   }
 };
 
-// =============================
-// SAVE CHI TIẾT
-// =============================
 export const handleSaveChiTiet = async (payload, refresh) => {
   try {
     await saveKetQuaChiTiet(payload);
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể lưu chỉ tiêu", "error");
+    await refresh?.();
+    return true;
+  } catch (error) {
+    Swal.fire("Không thể lưu chỉ tiêu", errorMessage(error, "Vui lòng thử lại."), "error");
+    return false;
   }
 };
 
-// =============================
-// DUYỆT
-// =============================
 export const handleDuyet = async (id, refresh) => {
   try {
     await approveKetQua(id);
-    Swal.fire("Đã ký", "Kết quả đã được duyệt", "success");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể duyệt", "error");
-  }
+    await Swal.fire("Đã duyệt kết quả", "Kết quả đã được khóa để chuẩn bị gửi.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể duyệt kết quả", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// HỦY DUYỆT
-// =============================
 export const handleHuyDuyet = async (id, refresh) => {
   try {
     await cancelApproveKetQua(id);
-    Swal.fire("Đã hủy ký", "Bạn có thể chỉnh sửa lại", "success");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể hủy ký", "error");
-  }
+    await Swal.fire("Đã hủy duyệt", "Kết quả đã được mở lại để chỉnh sửa.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể hủy duyệt", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// GỬI KQ
-// =============================
 export const handleGui = async (id, refresh) => {
   try {
     await sendKetQua(id);
-    Swal.fire("Đã gửi", "Đã gửi về phòng khám", "success");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể gửi", "error");
-  }
+    await Swal.fire("Đã gửi kết quả", "Kết quả đã được chuyển về phòng khám.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể gửi kết quả", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// NHẬN
-// =============================
 export const handleNhan = async (id, refresh) => {
   try {
     await nhanDVKT(id);
-    Swal.fire("Đã nhận", "", "success");
-    refresh && refresh();
-  } catch (err) {
-    Swal.fire("Lỗi", err?.response?.data, "error");
-  }
+    await Swal.fire("Đã nhận chỉ định", "Chỉ định đã chuyển sang danh sách đang thực hiện.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể nhận chỉ định", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// HỦY NHẬN
-// =============================
 export const handleHuyNhan = async (id, refresh) => {
   try {
     await huyNhanDVKT(id);
-    Swal.fire("Đã hủy nhận", "", "info");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể hủy nhận", "error");
-  }
+    await Swal.fire("Đã hủy nhận", "Chỉ định đã quay lại danh sách chờ.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể hủy nhận", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// HOÀN THÀNH
-// =============================
 export const handleHoanThanh = async (id, refresh) => {
   try {
     await hoanThanhDVKT(id);
-    Swal.fire("Hoàn thành", "", "success");
-    refresh && refresh();
-  } catch {
-    Swal.fire("Lỗi", "Không thể hoàn thành", "error");
-  }
+    await Swal.fire("Đã hoàn thành", "Chỉ định đã chuyển sang danh sách hoàn thành.", "success");
+    await refresh?.();
+  } catch (error) { Swal.fire("Không thể hoàn thành", errorMessage(error, "Vui lòng thử lại."), "error"); }
 };
 
-// =============================
-// LOGS
-// =============================
-export const loadLogs = async (id, setLogs) => {
-  const data = await getLogsDVKT(id);
-  setLogs(data);
-};
+export const loadLogs = async (id, setLogs) => setLogs(await getLogsDVKT(id));
 
-// =============================
-// EXPORT CONTROLLER
-// =============================
 export const ThucHienDVKTController = {
-  loadPending,
-  loadProcessing,
-  loadDone,
-  loadLogs,
-
-  handleNhan,
-  handleHuyNhan,
-  handleSaveKetQuaTong,
-  handleSaveChiTiet,
-  handleDuyet,
-  handleHuyDuyet,
-  handleGui,
-  handleHoanThanh,
-
-  fetchFull: fetchFullKetQua,
-  handleExportPDF,
+  loadPending, loadProcessing, loadDone, loadLogs,
+  handleNhan, handleHuyNhan, handleSaveKetQuaTong, handleSaveChiTiet,
+  handleDuyet, handleHuyDuyet, handleGui, handleHoanThanh,
+  fetchFull: fetchFullKetQua, handleExportPDF,
 };

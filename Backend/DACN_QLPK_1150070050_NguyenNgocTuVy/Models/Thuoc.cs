@@ -13,7 +13,11 @@ public partial class Thuoc
 
     public string? HamLuong { get; set; }
 
+    public string? HoatChat { get; set; }
+
     public string? DonVi { get; set; }
+
+    public string? LoaiThuoc { get; set; }
 
     public string? HangSx { get; set; }
 

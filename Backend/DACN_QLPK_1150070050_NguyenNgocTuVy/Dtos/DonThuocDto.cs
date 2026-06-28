@@ -13,6 +13,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public long IdBacSi { get; set; }
         public int SoNgayUong { get; set; }
         public string? GhiChu { get; set; }
+        public string? LoiDan { get; set; }
 
         public List<DonThuocChiTietCreateDto> ChiTiet { get; set; } = new();
     }
@@ -76,6 +77,14 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public long? IdThuoc { get; set; }
 
         public string TenThuoc { get; set; } = "";
+        public string? MaThuoc { get; set; }
+        public string? HoatChat { get; set; }
+        public string? LoaiThuoc { get; set; }
+        public string? TenNhom { get; set; }
+        public decimal? DonGia { get; set; }
+        public int? SoLuongTon { get; set; }
+        public bool DaThanhToan { get; set; }
+        public bool CanEdit { get; set; } = true;
 
         public int? SoLuong { get; set; }
         public string? DonVi { get; set; }

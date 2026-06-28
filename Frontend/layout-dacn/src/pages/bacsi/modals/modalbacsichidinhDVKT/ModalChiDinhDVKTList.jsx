@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Settings } from "lucide-react";
 
 export default function ModalChiDinhDVKTList({
   ds,
@@ -55,30 +56,30 @@ export default function ModalChiDinhDVKTList({
   // 5) RENDER
   // ======================================================
   return (
-    <div className="flex flex-col flex-1 max-h-[64vh] relative">
-
+    <div className="flex flex-col flex-1 max-h-[64vh] relative min-h-0">
       {/* BUTTON: Điều chỉnh cột */}
-      <div className="flex justify-end mb-2 pr-1">
+      <div className="flex justify-end p-2.5 shrink-0">
         <button
           onClick={() => setOpenCols(!openCols)}
-          className="px-2 py-1 border rounded bg-white hover:bg-gray-200 text-sm"
+          className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-350 transition-all duration-150 hover:shadow-sm"
         >
-          ⚙ Điều chỉnh cột
+          <Settings size={13} className="text-slate-400" />
+          Điều chỉnh cột
         </button>
       </div>
 
       {/* POPUP CHỌN CỘT */}
       {openCols && (
-        <div className="absolute right-2 top-10 bg-white border rounded shadow-lg p-3 z-50 w-48 animate-fadeIn">
-          <div className="space-y-2 text-sm">
+        <div className="absolute right-3 top-11 bg-white border border-[#0077B6]/15 rounded-xl shadow-[0_12px_36px_-6px_rgba(0,119,182,0.25)] p-4.5 z-50 w-48 space-y-2.5 animate-fadeIn">
+          <p className="text-[10px] font-extrabold uppercase text-[#0077B6] tracking-wider mb-2">Hiển thị cột</p>
+          <div className="space-y-2 text-xs font-semibold text-slate-600">
             {Object.keys(columns).map((key) => (
-              <label key={key} className="flex items-center gap-2 cursor-pointer">
+              <label key={key} className="flex items-center gap-2 cursor-pointer hover:text-slate-900 transition-colors">
                 <input
                   type="checkbox"
                   checked={columns[key]}
-                  onChange={() =>
-                    setColumns({ ...columns, [key]: !columns[key] })
-                  }
+                  onChange={() => setColumns({ ...columns, [key]: !columns[key] })}
+                  className="rounded border-slate-300 text-[#0077B6] focus:ring-[#0077B6]/20 h-4 w-4 transition-all"
                 />
                 {{
                   ma: "Mã DVKT",
@@ -94,51 +95,50 @@ export default function ModalChiDinhDVKTList({
       )}
 
       {/* TABLE */}
-      <div className="flex-1 overflow-y-auto overflow-x-auto border rounded">
-        <table className="min-w-max text-sm whitespace-nowrap">
-          <thead className="bg-blue-50 text-blue-700 sticky top-0 z-10 shadow-sm">
+      <div className="flex-1 overflow-auto border border-slate-200 rounded-xl mx-4 mb-2 shadow-sm min-h-0 bg-white">
+        <table className="min-w-full text-sm divide-y divide-slate-100">
+          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
             <tr>
-              <th className="p-2 w-10"></th>
-
-              {columns.ma && <th className="p-2">Mã dịch vụ</th>}
-              {columns.ten && <th className="p-2">Tên dịch vụ</th>}
-              {columns.phong && <th className="p-2">Phòng</th>}
-              {columns.tang && <th className="p-2">Tầng</th>}
-              {columns.donGia && <th className="p-2 text-right">Giá</th>}
+              <th className="px-4 py-3 text-center w-10"></th>
+              {columns.ma && <th className="px-4 py-3 text-left">Mã dịch vụ</th>}
+              {columns.ten && <th className="px-4 py-3 text-left">Tên dịch vụ</th>}
+              {columns.phong && <th className="px-4 py-3 text-left">Phòng</th>}
+              {columns.tang && <th className="px-4 py-3 text-center">Tầng</th>}
+              {columns.donGia && <th className="px-4 py-3 text-right">Giá</th>}
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {pagedData.map((item) => {
               const isSel = selected.some((s) => s.id === item.id);
 
               return (
                 <tr
-key={`${item.id}-${item.maDvkt}-${item.tenPhong || ""}`}
+                  key={`${item.id}-${item.maDvkt}-${item.tenPhong || ""}`}
                   onClick={() => toggleSelect(item)}
-                  className={`border-b cursor-pointer transition-all hover:bg-gray-100 ${
-                    isSel ? "bg-green-50 font-semibold" : ""
+                  className={`cursor-pointer transition-all duration-150 border-l-4 hover:bg-slate-50/70 ${
+                    isSel ? "bg-blue-50/50 border-l-[#0077B6] font-semibold" : "border-l-transparent"
                   }`}
                 >
-                  <td className="p-2 text-center">
+                  <td className="px-4 py-3 text-center w-10">
                     <input
                       type="checkbox"
                       checked={isSel}
                       readOnly
-                      className="pointer-events-none"
+                      className="rounded border-slate-300 text-[#0077B6] focus:ring-[#0077B6]/20 h-4 w-4 cursor-pointer transition-all"
                     />
                   </td>
 
-                  {columns.ma && <td className="p-2">{item.maDvkt}</td>}
-                  {columns.ten && <td className="p-2">{item.tenDvkt}</td>}
+                  {columns.ma && <td className="px-4 py-3 font-semibold text-slate-500">{item.maDvkt}</td>}
+                  {columns.ten && <td className="px-4 py-3 font-bold text-slate-900">{item.tenDvkt}</td>}
                   {columns.phong && (
-                    <td className="p-2">{item.phong?.tenPhong || "-"}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-700">{item.phong?.tenPhong || "-"}</td>
                   )}
                   {columns.tang && (
-                    <td className="p-2 text-center">{item.phong?.tang || "-"}</td>
+                    <td className="px-4 py-3 text-center text-slate-500 font-bold">{item.phong?.tang || "-"}</td>
                   )}
                   {columns.donGia && (
-                    <td className="p-2 text-right">
+                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">
                       {item.donGia?.toLocaleString("vi-VN")} đ
                     </td>
                   )}
@@ -148,7 +148,7 @@ key={`${item.id}-${item.maDvkt}-${item.tenPhong || ""}`}
 
             {pagedData.length === 0 && (
               <tr>
-                <td colSpan="6" className="p-3 text-center text-gray-500 italic">
+                <td colSpan="6" className="py-12 text-center text-slate-450 font-semibold italic">
                   Không có dịch vụ phù hợp.
                 </td>
               </tr>
@@ -159,21 +159,23 @@ key={`${item.id}-${item.maDvkt}-${item.tenPhong || ""}`}
 
       {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-2 px-2 py-1 text-sm">
+        <div className="flex items-center justify-between shrink-0 px-4 py-2 border-t border-slate-100 text-xs font-semibold text-slate-500 bg-slate-50/30">
           <button
-            className="px-3 py-1 border rounded-md bg-white hover:bg-gray-100 disabled:opacity-40"
+            type="button"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40 font-bold transition-all duration-150"
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
           >
             ← Trước
           </button>
 
-          <span className="font-medium">
-            Trang {page}/{totalPages}
+          <span className="font-bold">
+            Trang {page}/{totalPages} · {filtered.length} dịch vụ
           </span>
 
           <button
-            className="px-3 py-1 border rounded-md bg-white hover:bg-gray-100 disabled:opacity-40"
+            type="button"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40 font-bold transition-all duration-150"
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
           >

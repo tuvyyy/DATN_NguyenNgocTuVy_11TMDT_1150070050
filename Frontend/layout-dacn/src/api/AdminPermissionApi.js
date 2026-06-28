@@ -2,131 +2,241 @@ import axios from "axios";
 
 const API_BASE = "https://localhost:7007/api";
 
-/* ============================================================
-   🔹 ADMIN PERMISSION API – Vai trò & Phân quyền
-   ============================================================ */
+const readUserInfoToken = (storage) => {
+  try {
+    const raw = storage.getItem("userInfo");
+    if (!raw) return "";
+    const user = JSON.parse(raw);
+    return user?.accessToken || user?.token || user?.jwt || user?.access_token || "";
+  } catch {
+    return "";
+  }
+};
 
-// ==================== LẤY DANH SÁCH VAI TRÒ ====================
+const getAccessToken = () =>
+  localStorage.getItem("access_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("jwt") ||
+  sessionStorage.getItem("access_token") ||
+  sessionStorage.getItem("token") ||
+  readUserInfoToken(localStorage) ||
+  readUserInfoToken(sessionStorage);
+
+const withAuth = (headers = {}) => {
+  const token = getAccessToken();
+  return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+};
+
+const request = async (method, path, { params, data } = {}) => {
+  const res = await axios({
+    method,
+    url: `${API_BASE}${path}`,
+    params,
+    data,
+    headers: withAuth({ "Content-Type": "application/json" }),
+    validateStatus: () => true,
+  });
+
+  if (res.status >= 400) {
+    const msg = res?.data?.message || `Request failed: ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return res.data;
+};
+
 export const getRoles = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/vaitro`, {
-      validateStatus: () => true,
-    });
-    if (res.status === 200) return res.data;
-    console.warn("⚠️ Không thể tải vai trò:", res.statusText);
-    return [];
+    return await request("get", "/vaitro");
   } catch (err) {
-    console.error("❌ Lỗi tải vai trò:", err.message);
+    console.error("[AdminPermissionApi.getRoles]", err);
     return [];
   }
 };
 
-// ==================== LẤY DANH SÁCH CHỨC NĂNG ====================
-export const getFunctions = async () => {
+export const getAllUsers = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/chucnang`, {
-      validateStatus: () => true,
-    });
-    if (res.status === 200) return res.data;
-    console.warn("⚠️ Không thể tải chức năng:", res.statusText);
-    return [];
+    const users = await request("get", "/users");
+    return (Array.isArray(users) ? users : []).map((user) => ({
+      ...user,
+      roles: Array.isArray(user.roles)
+        ? user.roles
+        : String(user.vaiTro || "")
+            .split(",")
+            .map((role) => role.trim())
+            .filter(Boolean),
+    }));
   } catch (err) {
-    console.error("❌ Lỗi tải chức năng:", err.message);
+    console.error("[AdminPermissionApi.getAllUsers]", err);
     return [];
   }
 };
 
-// ==================== LẤY DANH SÁCH QUYỀN ====================
 export const getPermissions = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/quyen`, {
-      validateStatus: () => true,
-    });
-    if (res.status === 200) return res.data;
-    console.warn("⚠️ Không thể tải quyền:", res.statusText);
-    return [];
+    return await request("get", "/quyen");
   } catch (err) {
-    console.error("❌ Lỗi tải quyền:", err.message);
+    console.error("[AdminPermissionApi.getPermissions]", err);
     return [];
   }
 };
 
-// ==================== LẤY QUYỀN THEO VAI TRÒ ====================
 export const getRolePermissions = async (roleId) => {
   try {
-    const res = await axios.get(`${API_BASE}/users/vaitroquyen`, {
-      params: { roleId },
-    });
-    console.log("🌐 [API] GET /vaitroquyen =>", res.data);
-    return res.data;
+    return await request("get", "/users/vaitroquyen", { params: { roleId } });
   } catch (err) {
-    console.error("❌ API lỗi khi lấy rolePermissions:", err);
+    console.error("[AdminPermissionApi.getRolePermissions]", err);
     return [];
   }
 };
 
-
-// ==================== CẬP NHẬT QUYỀN CHO VAI TRÒ ====================
 export const updateRolePermissions = async (roleId, updates) => {
-  if (!roleId) {
-    console.warn("⚠️ Thiếu roleId khi cập nhật quyền.");
-    return null;
-  }
-
+  if (!roleId) return null;
   try {
-    console.log("📤 [PATCH] Gửi dữ liệu cập nhật quyền:", updates);
-
-    const res = await axios.patch(`${API_BASE}/users/vaitroquyen/${roleId}`, updates, {
-      headers: { "Content-Type": "application/json" },
-      validateStatus: () => true, // tránh Axios tự throw khi 400
-    });
-
-    console.log("📦 Phản hồi từ API:", res);
-
-    // ✅ Thành công: BE trả về 200 + message
-    if (res.status === 200 && res.data && res.data.message) {
-      console.log("✅ Cập nhật quyền vai trò thành công!");
-      return res.data; // { message: "Cập nhật quyền chi tiết cho vai trò thành công!" }
-    }
-
-    // ⚠️ Trường hợp lỗi BE trả khác định dạng
-    console.warn("⚠️ Cập nhật quyền thất bại:", res.status, res.statusText, res.data);
-    return null;
+    return await request("patch", `/users/vaitroquyen/${roleId}`, { data: updates });
   } catch (err) {
-    console.error("❌ Lỗi khi gọi API updateRolePermissions:", err);
+    console.error("[AdminPermissionApi.updateRolePermissions]", err);
     return null;
   }
 };
 
+export const getRoleMembers = async (roleId, roleName = "") => {
+  if (!roleId) return [];
+  try {
+    return await request("get", `/users/vaitro/${roleId}/members`);
+  } catch (err) {
+    console.warn("[AdminPermissionApi.getRoleMembers] fallback to /users?role=", err?.message || err);
+    if (!roleName) return [];
+    try {
+      const rawUsers = await request("get", "/users", { params: { role: roleName } });
+      return (Array.isArray(rawUsers) ? rawUsers : []).map((u) => ({
+        id: u.id,
+        tenDangNhap: u.tenDangNhap,
+        hoTen: u.hoTen,
+        chucDanh: u.chucDanh,
+        khoaPhong: u.khoaPhong,
+        hoatDong: u.hoatDong !== false,
+        roles: String(u.vaiTro || "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+      }));
+    } catch (fallbackErr) {
+      console.error("[AdminPermissionApi.getRoleMembers.fallback]", fallbackErr);
+      return [];
+    }
+  }
+};
 
-// ==================== LẤY QUYỀN CỦA NGƯỜI DÙNG ====================
 export const getUserPermissions = async (userId) => {
   if (!userId) return null;
   try {
-    const res = await axios.get(`${API_BASE}/users/${userId}/permissions`, {
-      validateStatus: () => true,
-    });
-    if (res.status === 200) return res.data;
-    console.warn("⚠️ Không thể tải quyền người dùng:", res.statusText);
-    return null;
+    return await request("get", `/users/${userId}/permissions`);
   } catch (err) {
-    console.error("❌ Lỗi tải quyền người dùng:", err.message);
+    console.error("[AdminPermissionApi.getUserPermissions]", err);
     return null;
   }
 };
 
-// ==================== KIỂM TRA NGƯỜI DÙNG CÓ QUYỀN THỰC HIỆN HÀNH ĐỘNG ====================
+export const updateUserRoles = async (userId, roleNames) => {
+  if (!userId) return null;
+  try {
+    return await request("patch", `/users/${userId}/roles-audit`, { data: roleNames || [] });
+  } catch (err) {
+    console.error("[AdminPermissionApi.updateUserRoles]", err);
+    return null;
+  }
+};
+
+export const getUserDataScope = async (userId) => {
+  if (!userId) return null;
+  try {
+    return await request("get", `/users/${userId}/data-scope`);
+  } catch (err) {
+    console.error("[AdminPermissionApi.getUserDataScope]", err);
+    return null;
+  }
+};
+
+export const updateUserDataScope = async (userId, roomIds) => {
+  if (!userId) return null;
+  try {
+    return await request("patch", `/users/${userId}/data-scope`, {
+      data: { roomIds: roomIds || [] },
+    });
+  } catch (err) {
+    console.error("[AdminPermissionApi.updateUserDataScope]", err);
+    return null;
+  }
+};
+
+export const applyReceptionPreset = async (userId, preset) => {
+  if (!userId || !preset) return null;
+  try {
+    return await request("post", `/users/${userId}/reception-preset`, {
+      data: { preset },
+    });
+  } catch (err) {
+    console.error("[AdminPermissionApi.applyReceptionPreset]", err);
+    return null;
+  }
+};
+
+export const cloneUserPermissions = async (sourceUserId, targetUserId) => {
+  if (!sourceUserId || !targetUserId) return null;
+  try {
+    return await request("post", "/users/clone-permissions", {
+      data: { sourceUserId, targetUserId },
+    });
+  } catch (err) {
+    console.error("[AdminPermissionApi.cloneUserPermissions]", err);
+    return null;
+  }
+};
+
+export const getUserPermissionConflicts = async (userId) => {
+  if (!userId) return null;
+  try {
+    return await request("get", `/users/${userId}/permission-conflicts`);
+  } catch (err) {
+    console.error("[AdminPermissionApi.getUserPermissionConflicts]", err);
+    return null;
+  }
+};
+
+export const getPermissionAuditLogs = async ({ userId, roleId, take = 40 } = {}) => {
+  try {
+    const params = { take };
+    if (userId) params.userId = userId;
+    if (roleId) params.roleId = roleId;
+    return await request("get", "/users/permission-audit", { params });
+  } catch (err) {
+    console.error("[AdminPermissionApi.getPermissionAuditLogs]", err);
+    return [];
+  }
+};
+
+export const undoLastPermissionChange = async ({ userId, roleId } = {}) => {
+  if (!userId && !roleId) return null;
+  try {
+    return await request("post", "/users/permission-undo-last", {
+      data: { userId: userId || null, roleId: roleId || null },
+    });
+  } catch (err) {
+    console.error("[AdminPermissionApi.undoLastPermissionChange]", err);
+    return null;
+  }
+};
+
 export const checkUserPermission = async (userId, feature, action) => {
   if (!userId || !feature || !action) return false;
   try {
-    const res = await axios.get(`${API_BASE}/users/${userId}/can`, {
+    const data = await request("get", `/users/${userId}/can`, {
       params: { feature, action },
-      validateStatus: () => true,
     });
-    if (res.status === 200) return res.data.allowed || false;
-    return false;
+    return !!data?.allowed;
   } catch (err) {
-    console.error("❌ Lỗi kiểm tra quyền người dùng:", err.message);
+    console.error("[AdminPermissionApi.checkUserPermission]", err);
     return false;
   }
 };

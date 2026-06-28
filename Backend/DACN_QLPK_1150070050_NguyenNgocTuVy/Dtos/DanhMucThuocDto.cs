@@ -22,7 +22,11 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos
         public int? IdNhom { get; set; }
         public string Ma { get; set; } = string.Empty;
         public string Ten { get; set; } = string.Empty;
+        public string? HoatChat { get; set; }
+        public string? LoaiThuoc { get; set; }
         public string? DonViTinh { get; set; }
+        public decimal? DonGia { get; set; }
+        public int? SoLuongTon { get; set; }
         public string? MoTa { get; set; }
         public bool? HoatDong { get; set; }
 

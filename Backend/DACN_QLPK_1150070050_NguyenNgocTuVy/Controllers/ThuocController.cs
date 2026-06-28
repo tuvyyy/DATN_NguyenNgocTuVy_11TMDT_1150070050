@@ -16,7 +16,22 @@ public class ThuocController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var list = await _db.Thuocs
-            .Select(x => new { x.Id, x.Ten, x.DonGia })
+            .Include(x => x.IdNhomNavigation)
+            .Where(x => x.HoatDong == true)
+            .OrderBy(x => x.Ten)
+            .Select(x => new
+            {
+                x.Id,
+                x.Ma,
+                x.Ten,
+                x.HamLuong,
+                x.HoatChat,
+                x.LoaiThuoc,
+                x.DonVi,
+                x.DonGia,
+                x.SoLuongTon,
+                TenNhom = x.IdNhomNavigation != null ? x.IdNhomNavigation.Ten : null
+            })
             .ToListAsync();
 
         return Ok(list);

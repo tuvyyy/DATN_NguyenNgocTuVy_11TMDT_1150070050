@@ -25,6 +25,12 @@ public partial class ChiDinhDvkt
 
     public DateTime? HoanThanhLuc { get; set; }
 
+    public bool BacSiDaDocKetQua { get; set; }
+
+    public DateTime? BacSiDocKetQuaLuc { get; set; }
+
+    public long? IdBacSiDocKetQua { get; set; }
+
     public virtual ICollection<DvktKetQua> DvktKetQuas { get; set; } = new List<DvktKetQua>();
 
     public virtual ICollection<DvktThucHienLog> DvktThucHienLogs { get; set; } = new List<DvktThucHienLog>();

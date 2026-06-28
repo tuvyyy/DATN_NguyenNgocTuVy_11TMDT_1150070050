@@ -1,253 +1,257 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
+import { History, Search } from "lucide-react";
 import { ThucHienDVKTController } from "../../../controllers/ThucHienDVKTController";
 
-const calcAge = (date) => {
-  if (!date) return "";
-  const dob = new Date(date);
-  return new Date().getFullYear() - dob.getFullYear();
-};
+const pageSize = 10;
+const normalizeItem = (raw) => ({
+  ...raw,
+  tenDvkt: raw.tenDvkt || raw.TenDvkt,
+  maDvkt: raw.maDvkt || raw.MaDvkt,
+  benhNhan: raw.benhNhan || raw.BenhNhan,
+  maBenhNhan: raw.maBenhNhan || raw.MaBenhNhan,
+  ngaySinh: raw.ngaySinh || raw.NgaySinh,
+  hoanThanhLuc: raw.hoanThanhLuc || raw.HoanThanhLuc,
+  trangThaiKQ: raw.trangThaiKQ || raw.TrangThaiKQ || "draft",
+  fileUrl: raw.fileUrl || raw.FileUrl,
+});
 
-export default function DoneTable({ data, refresh }) {
+export default function DoneTable({ data = [], loading = false, refresh = () => {} }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 8;
-
-  // ===================================================
-  // DEBUG: xem data trả về từ BE
-  // ===================================================
-  useEffect(() => {
-    console.log("🔍 [DoneTable] DATA NHẬN TỪ BE:", data);
-  }, [data]);
-
-  // ===================================================
-  // 🔍 SEARCH
-  // ===================================================
+  const normalized = useMemo(() => data.map(normalizeItem), [data]);
   const filtered = useMemo(() => {
-    if (!data) return [];
-    const s = search.toLowerCase();
-    return data.filter((item) =>
-      (item.tenDvkt || "").toLowerCase().includes(s) ||
-      (item.ketQuaText || "").toLowerCase().includes(s) ||
-      (item.benhNhan || "").toLowerCase().includes(s) ||
-      (item.maBenhNhan || "").toLowerCase().includes(s)
-    );
-  }, [data, search]);
+    const keyword = search.trim().toLocaleLowerCase("vi-VN");
+    if (!keyword) return normalized;
+    return normalized.filter((item) => [item.tenDvkt, item.ketQuaText, item.benhNhan, item.maBenhNhan]
+      .some((value) => value?.toLocaleLowerCase("vi-VN").includes(keyword)));
+  }, [normalized, search]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const rows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const total = filtered.length;
-  const totalPages = Math.ceil(total / pageSize) || 1;
-  const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
-  // ===================================================
-  // 📌 ACTIONS + DEBUG
-  // ===================================================
+  const approve = async (id) => {
+    const result = await Swal.fire({ title: "Duyệt kết quả?", text: "Kết quả sau khi duyệt sẽ không thể chỉnh sửa cho đến khi hủy duyệt.", icon: "question", showCancelButton: true, confirmButtonText: "Duyệt", cancelButtonText: "Quay lại", confirmButtonColor: "#059669" });
+    if (result.isConfirmed) await ThucHienDVKTController.handleDuyet(id, refresh);
+  };
 
-  const handleKy = async (id) => {
-    console.log("👉 BẤM DUYỆT ID =", id);
+  const cancelApproval = async (id) => {
+    const result = await Swal.fire({ title: "Hủy duyệt kết quả?", text: "Kết quả sẽ được mở lại để chỉnh sửa.", icon: "warning", showCancelButton: true, confirmButtonText: "Hủy duyệt", cancelButtonText: "Quay lại", confirmButtonColor: "#e11d48" });
+    if (result.isConfirmed) await ThucHienDVKTController.handleHuyDuyet(id, refresh);
+  };
 
-    const ok = await Swal.fire({
-      title: "Duyệt kết quả?",
-      icon: "question",
-      showCancelButton: true,
-    });
+  const send = async (id) => {
+    const result = await Swal.fire({ title: "Gửi kết quả về phòng khám?", icon: "question", showCancelButton: true, confirmButtonText: "Gửi kết quả", cancelButtonText: "Quay lại", confirmButtonColor: "#0284c7" });
+    if (result.isConfirmed) await ThucHienDVKTController.handleGui(id, refresh);
+  };
 
-    if (!ok.isConfirmed) {
-      console.log("❌ HỦY DUYỆT (user cancel)");
+  const edit = (item) => {
+    const state = String(item.trangThaiKQ || item.trangThai || "draft").toLowerCase();
+    if (["approved", "sent"].includes(state)) {
+      Swal.fire("Không thể sửa", "Hãy hủy duyệt trước khi chỉnh sửa kết quả.", "warning");
       return;
     }
-
-    console.log("🔵 GỌI API handleDuyet...");
-    await ThucHienDVKTController.handleDuyet(id, () => {
-      console.log("🟢 REFRESH SAU KHI DUYỆT");
-      refresh();
-    });
+    window.dispatchEvent(new CustomEvent("openTraKetQua", { detail: item }));
   };
-
-  const handleHuyKy = async (id) => {
-    console.log("👉 BẤM HỦY DUYỆT ID =", id);
-
-    const ok = await Swal.fire({
-      title: "Hủy duyệt?",
-      icon: "warning",
-      showCancelButton: true,
-    });
-
-    if (!ok.isConfirmed) {
-      console.log("❌ HỦY HỦY DUYỆT (user cancel)");
-      return;
-    }
-
-    console.log("🔵 GỌI API handleHuyDuyet...");
-    await ThucHienDVKTController.handleHuyDuyet(id, () => {
-      console.log("🟢 REFRESH SAU HỦY DUYỆT");
-      refresh();
-    });
-  };
-
-  const handleGui = async (id) => {
-    console.log("👉 BẤM GỬI ID =", id);
-
-    const ok = await Swal.fire({
-      title: "Gửi?",
-      icon: "info",
-      showCancelButton: true,
-    });
-
-    if (!ok.isConfirmed) return;
-
-    console.log("🔵 GỌI API handleGui...");
-await ThucHienDVKTController.handleGui(id, () => {
-  // CẬP NHẬT lại trạng thái item ngay trong FE
-  const newData = data.map(x =>
-    x.id === id ? { ...x, trangThaiKQ: "completed", trangThai: "sent" } : x
-  );
-
-  window.dispatchEvent(new CustomEvent("updateDoneTable", { detail: newData }));
-});
-  };
-
-  const handleEdit = (item) => {
-    console.log("👉 BẤM SỬA:", item);
-
-    const state = item.trangThai;
-    if (state === "approved" || state === "sent") {
-      Swal.fire("Không thể sửa", "Bạn phải hủy duyệt trước", "warning");
-      return;
-    }
-
-    window.dispatchEvent(
-      new CustomEvent("openTraKetQua", {
-        detail: item,
-      })
-    );
-  };
-
-  // ===================================================
-  // 📌 RENDER TABLE
-  // ===================================================
 
   return (
-    <div className="bg-white rounded-xl shadow p-4 h-full">
-
-      {/* SEARCH */}
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Tìm theo tên DVKT / BN / kết quả..."
-        className="w-full mb-3 px-3 py-2 border rounded"
-      />
-
-      <div className="overflow-auto border rounded">
-        <table className="min-w-max text-sm">
-          <thead className="bg-green-50 text-green-700 sticky top-0">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-slate-200 bg-slate-50/30 p-3">
+        <div className="relative w-full">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <Search size={15} />
+          </span>
+          <input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Tìm người bệnh, DVKT hoặc kết quả..."
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#0077B6] focus:ring-4 focus:ring-[#0077B6]/10 hover:border-slate-350 font-semibold"
+          />
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-[1100px] w-full text-sm">
+          <thead className="sticky top-0 z-20 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
             <tr>
-              <th className="px-3 py-2 border">Mã BN</th>
-              <th className="px-3 py-2 border">Bệnh nhân</th>
-              <th className="px-3 py-2 border">Tuổi</th>
-              <th className="px-3 py-2 border">Mã DVKT</th>
-              <th className="px-3 py-2 border">Tên DVKT</th>
-              <th className="px-3 py-2 border">Hoàn thành lúc</th>
-              <th className="px-3 py-2 border">Hành động</th>
+              <th className="px-4 py-3 text-left">Người bệnh</th>
+              <th className="px-4 py-3 text-left">Dịch vụ kỹ thuật</th>
+              <th className="px-4 py-3 text-left">Hoàn thành lúc</th>
+              <th className="px-4 py-3 text-left">Trạng thái kết quả</th>
+              <th className="sticky right-0 z-30 w-[420px] bg-slate-50 px-4 py-3 text-center border-l border-slate-200">
+                Thao tác
+              </th>
             </tr>
           </thead>
-
-<tbody>
-  {slice.map((raw) => {
-
-    const item = {
-      ...raw,
-      tenDvkt: raw.tenDvkt || raw.TenDvkt,
-      maDvkt: raw.maDvkt || raw.MaDvkt,
-      benhNhan: raw.benhNhan || raw.BenhNhan,
-      maBenhNhan: raw.maBenhNhan || raw.MaBenhNhan,
-      ngaySinh: raw.ngaySinh || raw.NgaySinh,
-      hoanThanhLuc: raw.hoanThanhLuc || raw.HoanThanhLuc,
-      trangThaiKQ: raw.trangThaiKQ || raw.TrangThaiKQ,
-    };
-
-    const state = item.trangThaiKQ;
-    console.log("🟡 RENDER ROW:", item.id, "KQ:", state, "DVKT:", item.trangThai);
-
-    return (
-   <tr key={item.id} className="border-t hover:bg-green-50">
-
-  {/* ⭐ MÃ BN */}
-  <td className="px-3 py-2 border">{item.maBenhNhan || "—"}</td>
-
-  {/* ⭐ TÊN BN */}
-  <td className="px-3 py-2 border">{item.benhNhan}</td>
-
-  {/* ⭐ TUỔI */}
-  <td className="px-3 py-2 border">{calcAge(item.ngaySinh)}</td>
-
-  {/* Mã DVKT */}
-  <td className="px-3 py-2 border">{item.maDvkt}</td>
-
-  {/* Tên DVKT */}
-  <td className="px-3 py-2 border">{item.tenDvkt}</td>
-
-  {/* Hoàn thành lúc */}
-  <td className="px-3 py-2 border">
-    {item.hoanThanhLuc
-      ? new Date(item.hoanThanhLuc).toLocaleString()
-      : "—"}
-  </td>
-
-  {/* Hành động */}
-  <td className="px-3 py-2 border">
-    <div className="flex gap-2 justify-center">
-
-      {state === "approved" ? (
-        <button
-          onClick={() => handleHuyKy(item.id)}
-          className="px-3 py-1 bg-red-500 text-white rounded"
-        >Hủy duyệt</button>
-      ) : (
-        <button
-          onClick={() => handleKy(item.id)}
-          className="px-3 py-1 bg-green-600 text-white rounded"
-        >Duyệt</button>
-      )}
-
-      <button
-        onClick={() => handleEdit(item)}
-        disabled={state === "approved" || state === "sent"}
-        className="px-3 py-1 bg-yellow-500 text-white rounded disabled:opacity-50"
-      >
-        Sửa
-      </button>
-<button
-      onClick={() => handleGui(item.id)}
-      disabled={state !== "approved"}
-      className="px-3 py-1 bg-blue-500 text-white rounded disabled:opacity-50"
-    >
-      Gửi
-    </button>
-{/* ⭐ XEM PDF — chỉ hiển thị khi đã gửi */}
-{item.trangThaiKQ === "completed" && item.fileUrl && (
-  <button
-    onClick={() =>
-      window.open(`https://localhost:7007${item.fileUrl}`, "_blank")
-    }
-    className="px-3 py-1 bg-purple-600 text-white rounded"
-  >
-    Xem PDF
-  </button>
-)}
-
-
-    </div>
-  </td>
-
-</tr>
-
-              );
-            })}
+          <tbody className="divide-y divide-slate-100">
+            {loading && !data.length ? (
+              Array.from({ length: 8 }).map((_, index) => (
+                <tr key={index}>
+                  {Array.from({ length: 5 }).map((__, cell) => (
+                    <td
+                      key={cell}
+                      className={`${
+                        cell === 4 ? "sticky right-0 border-l bg-white" : ""
+                      } px-4 py-3`}
+                    >
+                      <span className="app-skeleton-line block h-3.5 w-full" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : rows.length ? (
+              rows.map((item) => {
+                const resultState = String(item.trangThaiKQ || item.trangThai || "draft").toLowerCase();
+                const approved = resultState === "approved";
+                const sent =
+                  resultState === "sent" ||
+                  String(item.trangThai).toLowerCase() === "sent";
+                const hasResult = resultState === "completed" || !!item.ketQuaText || !!item.fileUrl;
+                return (
+                  <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="border-l-4 border-l-emerald-500 px-4 py-3">
+                      <p className="font-bold text-slate-900">{item.benhNhan || "-"}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">{item.maBenhNhan || "-"}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-800">{item.tenDvkt || "-"}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">{item.maDvkt || "-"}</p>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600 font-medium">
+                      {item.hoanThanhLuc ? new Date(item.hoanThanhLuc).toLocaleString("vi-VN") : "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ResultStatus state={resultState} />
+                    </td>
+                    <td className="sticky right-0 border-l border-slate-100 bg-white px-4 py-3 group-hover:bg-slate-50/50">
+                      <div className="flex justify-center gap-1.5">
+                        {approved ? (
+                          <button
+                            type="button"
+                            onClick={() => cancelApproval(item.id)}
+                            className="h-8 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 px-3 text-xs font-bold text-rose-700 transition-all duration-150 hover:-translate-y-[0.5px] active:translate-y-0"
+                          >
+                            Hủy duyệt
+                          </button>
+                        ) : (
+                          !sent && (
+                            <button
+                              type="button"
+                              onClick={() => approve(item.id)}
+                              disabled={!hasResult}
+                              title={hasResult ? "Duyệt kết quả" : "Chưa có kết quả để duyệt"}
+                              className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 hover:shadow-md hover:shadow-emerald-600/15 px-3 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:-translate-y-[0.5px] active:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:hover:translate-y-0"
+                            >
+                              Duyệt
+                            </button>
+                          )
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => edit(item)}
+                          disabled={approved || sent}
+                          className="h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-350 px-3 text-xs font-bold text-slate-700 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 transition-all duration-150 hover:-translate-y-[0.5px] active:translate-y-0"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => send(item.id)}
+                          disabled={!approved}
+                          className={`h-8 rounded-lg px-3 text-xs font-bold shadow-sm transition-all duration-150 hover:-translate-y-[0.5px] active:translate-y-0 ${
+                            !approved
+                              ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                              : "bg-[#0077B6] hover:bg-[#006093] hover:shadow-md hover:shadow-[#0077B6]/15 text-white"
+                          }`}
+                        >
+                          Gửi
+                        </button>
+                        {sent && item.fileUrl && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.open(
+                                /^https?:/i.test(item.fileUrl)
+                                  ? item.fileUrl
+                                  : `https://localhost:7007${item.fileUrl}`,
+                                "_blank"
+                              )
+                            }
+                            className="h-8 rounded-lg border border-[#0077B6]/20 bg-[#0077B6]/5 hover:bg-[#0077B6]/10 px-3 text-xs font-bold text-[#0077B6] transition-all duration-150 hover:-translate-y-[0.5px] active:translate-y-0"
+                          >
+                            Xem PDF
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => window.dispatchEvent(new CustomEvent("openDVKTLogs", { detail: item }))}
+                          className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition-all duration-150 hover:-translate-y-[0.5px] hover:border-slate-350 hover:bg-slate-50 hover:text-slate-900 active:translate-y-0"
+                          title="Lịch sử xử lý"
+                        >
+                          <History size={13} />
+                          Lịch sử
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={5} className="py-12 text-center text-slate-400 font-semibold">
+                  Chương có chỉ định đã hoàn thành.
+                </td>
+              </tr>
+            )}
           </tbody>
-
         </table>
       </div>
+      <Pagination page={page} totalPages={totalPages} total={filtered.length} onChange={setPage} />
+    </div>
+  );
+}
 
+function ResultStatus({ state }) {
+  const config =
+    state === "approved"
+      ? ["Đã duyệt", "bg-emerald-50 border border-emerald-250 text-emerald-700"]
+      : state === "sent"
+      ? ["Đã gửi", "bg-[#0077B6]/10 border border-[#0077B6]/20 text-[#0077B6]"]
+      : ["Chờ duyệt", "bg-amber-50 border border-amber-250 text-amber-700"];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${config[1]}`}>
+      {config[0]}
+    </span>
+  );
+}
+
+function Pagination({ page, totalPages, total, onChange }) {
+  return (
+    <div className="flex h-11 shrink-0 items-center justify-between border-t border-slate-200 bg-slate-50/50 px-4 text-xs font-semibold text-slate-500">
+      <span>
+        Trang {page}/{totalPages} · {total} kết quả
+      </span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40 font-bold transition-colors"
+        >
+          Trước
+        </button>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onChange(page + 1)}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40 font-bold transition-colors"
+        >
+          Sau
+        </button>
+      </div>
     </div>
   );
 }

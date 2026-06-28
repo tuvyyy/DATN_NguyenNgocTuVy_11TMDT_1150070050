@@ -3,6 +3,7 @@
     public class CreateChiDinhDVKTDto
     {
         public long IdLanKham { get; set; }
+        public long? IdBacSi { get; set; }
         public long IdDVKT { get; set; }
         public int SoLuong { get; set; }
         public string? GhiChu { get; set; }

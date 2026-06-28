@@ -1,87 +1,55 @@
 import React from "react";
-import { Search, Plus, ChevronsUpDown, Check } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
-export default function UserFilter({ filters, setFilters, onFilter, onAdd }) {
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") onFilter();
-  };
+const ROLE_NAMES = {
+  ADMIN: "Quản trị viên",
+  BAC_SI: "Bác sĩ",
+  TIEP_DON: "Nhân viên tiếp đón",
+  THU_NGAN: "Nhân viên thu ngân",
+  KY_THUAT_VIEN: "Kỹ thuật viên cận lâm sàng",
+};
 
-  const handleReset = () => {
-    setFilters({ keyword: "", role: "", active: "" });
-    onFilter();
-  };
-
+export default function UserFilter({ filters, setFilters, roles, onAdd }) {
   return (
-    <div className="mb-5 grid grid-cols-1 md:grid-cols-6 gap-3 items-center">
-      {/* Ô tìm kiếm */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+    <div className="grid grid-cols-[minmax(260px,1.5fr)_minmax(190px,0.8fr)_minmax(180px,0.7fr)_auto] gap-3">
+      <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-100">
+        <Search size={16} className="text-slate-400" />
         <input
           type="text"
-          placeholder="Tìm theo tên hoặc tài khoản…"
-          className="pl-9 pr-3 py-2 w-full border border-sky-200 rounded-lg focus:ring focus:ring-sky-100"
+          placeholder="Tìm tên, tài khoản hoặc email"
+          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-slate-800 outline-none"
           value={filters.keyword}
-          onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-          onKeyDown={handleKeyDown}
+          onChange={(event) => setFilters({ ...filters, keyword: event.target.value })}
         />
-      </div>
+      </label>
 
-      {/* Lọc vai trò */}
-      <div className="relative">
-        <ChevronsUpDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <select
-          className="appearance-none w-full border border-slate-200 rounded-lg px-3 py-2"
-          value={filters.role}
-          onChange={(e) => {
-            setFilters({ ...filters, role: e.target.value });
-            onFilter();
-          }}
-        >
-          <option value="">Tất cả vai trò</option>
-          <option value="ADMIN">Admin</option>
-          <option value="BAC_SI">Bác sĩ</option>
-          <option value="THU_NGAN">Thu ngân</option>
-          <option value="TIEP_DON">Lễ tân</option>
-        </select>
-      </div>
-
-      {/* Lọc trạng thái */}
-      <div className="relative">
-        <ChevronsUpDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <select
-          className="appearance-none w-full border border-slate-200 rounded-lg px-3 py-2"
-          value={filters.active}
-          onChange={(e) => {
-            setFilters({ ...filters, active: e.target.value });
-            onFilter();
-          }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="true">Đang hoạt động</option>
-          <option value="false">Đã khóa</option>
-        </select>
-      </div>
-
-      <button
-        className="bg-sky-600 text-white px-4 py-2 rounded-lg hover:bg-sky-700 w-full transition inline-flex items-center justify-center gap-2"
-        onClick={onFilter}
+      <select
+        className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+        value={filters.role}
+        onChange={(event) => setFilters({ ...filters, role: event.target.value })}
       >
-        <Search className="w-4 h-4" /> Lọc
-      </button>
+        <option value="">Tất cả vai trò</option>
+        {roles.map((role) => (
+          <option key={role.id} value={role.ten}>{ROLE_NAMES[role.ten] || role.ten}</option>
+        ))}
+      </select>
+
+      <select
+        className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+        value={filters.active}
+        onChange={(event) => setFilters({ ...filters, active: event.target.value })}
+      >
+        <option value="">Tất cả trạng thái</option>
+        <option value="true">Đang hoạt động</option>
+        <option value="false">Đã khóa</option>
+      </select>
 
       <button
-        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 w-full transition inline-flex items-center justify-center gap-2"
+        type="button"
         onClick={onAdd}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-700"
       >
-        <Plus className="w-4 h-4" /> Thêm người dùng
-      </button>
-
-      <button
-        className="hidden md:inline-flex border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 w-full items-center justify-center gap-2"
-        onClick={handleReset}
-      >
-        <Check className="w-4 h-4 rotate-45 text-slate-400" />
-        Đặt lại bộ lọc
+        <Plus size={16} /> Thêm người dùng
       </button>
     </div>
   );

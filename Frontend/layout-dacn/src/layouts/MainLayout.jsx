@@ -2,12 +2,12 @@ import React from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 
-export default function MainLayout({ children }) {
+export default function MainLayout({ children, headerContext }) {
   return (
-    <div className="flex flex-col h-screen  overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50">
+    <div className="app-page-bg flex h-screen flex-col overflow-hidden">
       {/* Header cố định */}
       <div className="flex-shrink-0">
-        <Header />
+        <Header context={headerContext} />
       </div>
 
       {/* Main full width, full height, không cuộn */}

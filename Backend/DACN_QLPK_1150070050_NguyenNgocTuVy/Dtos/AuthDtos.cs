@@ -23,4 +23,12 @@
         public string[] Roles { get; set; } = Array.Empty<string>();
         public string Token { get; set; } = string.Empty;
     }
+
+    public class UpdateProfileRequest
+    {
+        public string? HoTen { get; set; }
+        public string TenDangNhap { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? SoDienThoai { get; set; }
+    }
 }

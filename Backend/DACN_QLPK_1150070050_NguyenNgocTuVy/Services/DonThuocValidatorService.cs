@@ -2,6 +2,9 @@
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Dtos;
 using DACN_QLPK_1150070050_NguyenNgocTuVy.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Services
 {
@@ -166,6 +169,31 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Services
             return (warnings, errors);
         }
 
+        public async Task<List<string>> CheckTrungHoatChat(List<long> ids)
+        {
+            var errors = new List<string>();
+            if (ids.Count < 2) return errors;
+
+            var thuocs = await _db.Thuocs
+                .Where(x => ids.Contains(x.Id))
+                .ToListAsync();
+
+            var duplicated = thuocs
+                .GroupBy(GetHoatChatKey)
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() > 1)
+                .ToList();
+
+            foreach (var group in duplicated)
+            {
+                var names = string.Join(", ", group.Select(x => x.Ten).Distinct());
+                var label = group.First().HoatChat?.Trim();
+                if (string.IsNullOrWhiteSpace(label)) label = group.First().Ten;
+                errors.Add($"Trùng hoạt chất {label}: {names}");
+            }
+
+            return errors;
+        }
+
         // ======================================================
         // 6️⃣ HÀM TỔNG HỢP KIỂM TRA
         // ======================================================
@@ -175,6 +203,8 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Services
             var errors = new List<string>();
 
             var ids = dto.ChiTiet.Select(x => x.IdThuoc).Distinct().ToList();
+
+            errors.AddRange(await CheckTrungHoatChat(ids));
 
             errors.AddRange(await CheckDiUng(dto.IdBenhNhan, ids));
 
@@ -192,6 +222,38 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Services
             errors.AddRange(e5);
 
             return (warnings, errors);
+        }
+
+        private static string GetHoatChatKey(Thuoc thuoc)
+        {
+            var value = ExtractHoatChatFromText(thuoc.HoatChat)
+                        ?? ExtractHoatChatFromText(thuoc.MoTa)
+                        ?? thuoc.Ten;
+            return NormalizeKey(value);
+        }
+
+        private static string? ExtractHoatChatFromText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var match = Regex.Match(value, @"(?:ho[aạ]t\s*ch[aấ]t|active\s*ingredient)\s*[:=\-]\s*(.+)", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value.Trim() : value.Trim();
+        }
+
+        private static string NormalizeKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var normalized = value.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder();
+            foreach (var ch in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                    builder.Append(ch);
+            }
+
+            var text = builder.ToString().Normalize(NormalizationForm.FormC).ToUpperInvariant();
+            text = Regex.Replace(text, @"\b(\d+([,.]\d+)?\s*(MG|G|ML|MCG|IU|UI|%|VIEN|ONG|GOI|CHAI|TUYP))\b", " ");
+            text = Regex.Replace(text, @"[^A-Z0-9]+", " ").Trim();
+            return text;
         }
     }
 }

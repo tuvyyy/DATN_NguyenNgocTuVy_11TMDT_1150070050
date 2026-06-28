@@ -81,7 +81,11 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                     IdNhom = x.IdNhom,
                     Ma = x.Ma,
                     Ten = x.Ten,
+                    HoatChat = x.HoatChat,
+                    LoaiThuoc = x.LoaiThuoc,
                     DonViTinh = x.DonVi,
+                    DonGia = x.DonGia,
+                    SoLuongTon = x.SoLuongTon,
                     MoTa = x.MoTa,
                     HoatDong = x.HoatDong,
                     TenNhom = x.IdNhomNavigation != null ? x.IdNhomNavigation.Ten : null
@@ -127,7 +131,11 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                 IdNhom = t.IdNhom,
                 Ma = t.Ma,
                 Ten = t.Ten,
+                HoatChat = t.HoatChat,
+                LoaiThuoc = t.LoaiThuoc,
                 DonViTinh = t.DonVi,
+                DonGia = t.DonGia,
+                SoLuongTon = t.SoLuongTon,
                 MoTa = t.MoTa,
                 HoatDong = t.HoatDong,
                 TenNhom = t.IdNhomNavigation?.Ten
@@ -144,7 +152,11 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                 IdNhom = dto.IdNhom,
                 Ma = dto.Ma,
                 Ten = dto.Ten,
+                HoatChat = dto.HoatChat,
+                LoaiThuoc = dto.LoaiThuoc,
                 DonVi = dto.DonViTinh,
+                DonGia = dto.DonGia,
+                SoLuongTon = dto.SoLuongTon,
                 MoTa = dto.MoTa,
                 HoatDong = dto.HoatDong
             };
@@ -168,7 +180,11 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
             entity.IdNhom = dto.IdNhom;
             entity.Ma = dto.Ma;
             entity.Ten = dto.Ten;
+            entity.HoatChat = dto.HoatChat;
+            entity.LoaiThuoc = dto.LoaiThuoc;
             entity.DonVi = dto.DonViTinh;
+            entity.DonGia = dto.DonGia;
+            entity.SoLuongTon = dto.SoLuongTon;
             entity.MoTa = dto.MoTa;
             entity.HoatDong = dto.HoatDong;
 

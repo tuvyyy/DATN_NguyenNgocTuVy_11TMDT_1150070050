@@ -16,4 +16,6 @@ public partial class Benh
     public virtual ICollection<ChongChiDinhBenhThuoc> ChongChiDinhBenhThuocs { get; set; } = new List<ChongChiDinhBenhThuoc>();
 
     public virtual ICollection<LanKham> LanKhams { get; set; } = new List<LanKham>();
+
+    public virtual ICollection<LanKhamBenhKemTheo> LanKhamBenhKemTheos { get; set; } = new List<LanKhamBenhKemTheo>();
 }

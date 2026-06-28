@@ -37,6 +37,22 @@ public partial class BenhNhan
 
     public string? QuocGia { get; set; }
 
+    public string? NguoiLienHeKhanCap { get; set; }
+
+    public string? SdtLienHeKhanCap { get; set; }
+
+    public string? QuanHeLienHeKhanCap { get; set; }
+
+    public string? NguoiGiamHo { get; set; }
+
+    public string? SdtGiamHo { get; set; }
+
+    public string? QuanHeGiamHo { get; set; }
+
+    public string? GhiChuDinhDanh { get; set; }
+
+    public bool? IsPotentialDuplicate { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

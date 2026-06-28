@@ -1,119 +1,90 @@
 import React from "react";
+import { KeyRound, Lock, Pencil, Unlock, Users } from "lucide-react";
 import AdminAuthController from "../../../controllers/AdminAuthController";
 
-export default function UserTable({ users, loading, onEdit, loadData }) {
-  const handleToggleActive = async (user) => {
-    if (user.hoatDong) {
-      await AdminAuthController.disableUser(user.id, loadData);
-    } else {
-      await AdminAuthController.enableUser(user.id, loadData);
-    }
-  };
+const ROLE_NAMES = {
+  ADMIN: "Quản trị viên",
+  QUAN_TRI: "Quản trị viên",
+  BAC_SI: "Bác sĩ",
+  TIEP_DON: "Tiếp đón",
+  THU_NGAN: "Thu ngân",
+  KY_THUAT_VIEN: "Kỹ thuật viên CLS",
+  TIEP_DON_PRESET_FULL: "Tiếp đón - toàn quyền",
+};
+
+const roleLabel = (role) => ROLE_NAMES[role] || role;
+
+export default function UserTable({ users, loading, onEdit, loadData, startIndex = 0 }) {
+  const skeletonRows = Array.from({ length: 8 });
 
   return (
-    <div className="bg-white rounded-3xl shadow-lg border border-sky-100 overflow-hidden w-full">
-      <table className="w-full text-sm text-gray-700">
-        <thead className="bg-gradient-to-r from-sky-100 to-pink-100 text-sky-800">
-          <tr className="text-left">
-            <th className="py-3 px-4 text-center w-[50px]">#</th>
-            <th className="py-3 px-4">Tên đăng nhập</th>
-            <th className="py-3 px-4">Họ tên</th>
-            <th className="py-3 px-4">Email</th>
-            <th className="py-3 px-4">Vai trò</th>
-            <th className="py-3 px-4 text-center w-[120px]">Trạng thái</th>
-            <th className="py-3 px-4 text-center w-[190px]">Thao tác</th>
+    <table className="w-full border-collapse text-sm">
+      <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+        <tr>
+          <th className="w-14 px-3 py-3 text-center">STT</th>
+          <th className="px-3 py-3 text-left">Nhân viên</th>
+          <th className="px-3 py-3 text-left">Liên hệ</th>
+          <th className="px-3 py-3 text-left">Vai trò</th>
+          <th className="w-32 px-3 py-3 text-center">Trạng thái</th>
+          <th className="w-36 px-3 py-3 text-center">Thao tác</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-200 bg-white">
+        {loading ? (
+          skeletonRows.map((_, index) => (
+            <tr key={index}>
+              <td colSpan={6} className="px-4 py-3"><div className="h-5 animate-pulse rounded bg-slate-100" /></td>
+            </tr>
+          ))
+        ) : users.length === 0 ? (
+          <tr>
+            <td colSpan={6} className="h-72 text-center">
+              <Users size={30} className="mx-auto text-slate-300" />
+              <p className="mt-3 font-semibold text-slate-700">Không có người dùng phù hợp</p>
+              <p className="mt-1 text-xs text-slate-500">Thử thay đổi từ khóa hoặc bộ lọc.</p>
+            </td>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-sky-50">
-          {loading ? (
-            <tr>
-              <td colSpan="7" className="text-center py-5 text-gray-500">
-                Đang tải...
+        ) : (
+          users.map((user, index) => (
+            <tr key={user.id} className="hover:bg-sky-50/60">
+              <td className="px-3 py-2.5 text-center text-slate-500">{startIndex + index + 1}</td>
+              <td className="px-3 py-2.5">
+                <p className="font-semibold text-slate-900">{user.hoTen || "Chưa cập nhật"}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{user.tenDangNhap}</p>
+              </td>
+              <td className="px-3 py-2.5">
+                <p className="text-slate-700">{user.email || "Chưa có email"}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{user.soDienThoai || "Chưa có số điện thoại"}</p>
+              </td>
+              <td className="px-3 py-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {(Array.isArray(user.vaiTro) ? user.vaiTro : []).length ? user.vaiTro.map((role) => (
+                    <span key={role} className="rounded bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">{roleLabel(role)}</span>
+                  )) : <span className="text-xs text-slate-400">Chưa phân vai trò</span>}
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-center">
+                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${user.hoatDong ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                  {user.hoatDong ? "Hoạt động" : "Đã khóa"}
+                </span>
+              </td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center justify-center gap-1.5">
+                  <button type="button" onClick={() => onEdit(user)} className="rounded-lg border border-slate-200 p-2 text-sky-700 hover:bg-sky-50" title="Sửa thông tin">
+                    <Pencil size={15} />
+                  </button>
+                  <button type="button" onClick={() => AdminAuthController.resetPassword(user.id, user.tenDangNhap)} className="rounded-lg border border-slate-200 p-2 text-amber-700 hover:bg-amber-50" title="Đặt lại mật khẩu">
+                    <KeyRound size={15} />
+                  </button>
+                  <button type="button" onClick={() => AdminAuthController.toggleLock(user.id, user.hoatDong, loadData)} className={`rounded-lg border border-slate-200 p-2 ${user.hoatDong ? "text-rose-700 hover:bg-rose-50" : "text-emerald-700 hover:bg-emerald-50"}`} title={user.hoatDong ? "Khóa tài khoản" : "Mở khóa tài khoản"}>
+                    {user.hoatDong ? <Lock size={15} /> : <Unlock size={15} />}
+                  </button>
+                </div>
               </td>
             </tr>
-          ) : users.length === 0 ? (
-            <tr>
-              <td colSpan="7" className="text-center py-5 text-gray-500">
-                Không có dữ liệu
-              </td>
-            </tr>
-          ) : (
-            users.map((u, i) => (
-              <tr
-                key={u.id}
-                className="hover:bg-gradient-to-r hover:from-sky-50 hover:to-pink-50 transition-colors duration-200"
-              >
-                <td className="text-center py-2">{i + 1}</td>
-                <td className="py-2 px-4 font-medium text-gray-800">
-                  {u.tenDangNhap}
-                </td>
-                <td className="py-2 px-4">{u.hoTen}</td>
-                <td className="py-2 px-4">{u.email}</td>
-                <td className="py-2 px-4">
-                  {Array.isArray(u.vaiTro)
-                    ? u.vaiTro.join(", ")
-                    : u.vaiTro || "—"}
-                </td>
-
-                <td className="text-center">
-                  {u.hoatDong ? (
-                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
-                      Hoạt động
-                    </span>
-                  ) : (
-                    <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
-                      Khoá
-                    </span>
-                  )}
-                </td>
-
-                <td className="text-center py-2 flex justify-center gap-3">
-  {/* ✅ Reset mật khẩu */}
-  <button
-    className="text-sky-600 hover:text-sky-800 hover:scale-125 transition-all duration-150"
-    onClick={() => AdminAuthController.resetPassword(u.id, u.tenDangNhap)}
-    title={`Đặt lại mật khẩu cho ${u.tenDangNhap}`}
-  >
-    🔁
-  </button>
-
-  {/* ✅ Sửa */}
-  <button
-    className="text-indigo-600 hover:text-indigo-800 hover:scale-125 transition-all duration-150"
-    onClick={() => onEdit(u)}
-    title="Sửa thông tin"
-  >
-    ✏️
-  </button>
-
-  {/* ✅ Khóa / mở */}
-  <button
-    className={`${
-      u.hoatDong ? "text-yellow-600 hover:text-yellow-800" : "text-green-600 hover:text-green-800"
-    } hover:scale-125 transition-all duration-150`}
-    onClick={() =>
-      AdminAuthController.toggleLock(u.id, u.hoatDong, loadData)
-    }
-    title={u.hoatDong ? "Khoá tài khoản" : "Mở khoá tài khoản"}
-  >
-    {u.hoatDong ? "🔒" : "🔓"}
-  </button>
-
-  {/* ✅ Xóa */}
-  <button
-    className="text-red-600 hover:text-red-800 hover:scale-125 transition-all duration-150"
-    onClick={() => AdminAuthController.deleteUser(u.id, loadData)}
-    title="Xoá người dùng"
-  >
-    🗑️
-  </button>
-</td>
-
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+          ))
+        )}
+      </tbody>
+    </table>
   );
 }

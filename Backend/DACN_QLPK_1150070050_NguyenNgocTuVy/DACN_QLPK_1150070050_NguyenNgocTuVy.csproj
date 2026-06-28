@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin_temp*/**;bin_temp*/**/*</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,10 +24,6 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
     <PackageReference Include="VNPAY.NET" Version="8.5.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="C:\Users\ace\Downloads\VNPAY.NET-master\VNPAY.NET\VNPAY.NET.csproj" />
   </ItemGroup>
 
 </Project>

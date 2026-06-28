@@ -109,8 +109,12 @@ public partial class DACNDbContext : DbContext
     public virtual DbSet<VaiTroQuyen> VaiTroQuyens { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=.;Database=DACN;Trusted_Connection=True;TrustServerCertificate=True");
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlServer("Name=ConnectionStrings:DefaultConnection");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -236,9 +240,13 @@ public partial class DACNDbContext : DbContext
 
             entity.ToTable("benh_nhan");
 
-            entity.HasIndex(e => e.Cccd, "UQ_BenhNhan_CCCD").IsUnique();
+            entity.HasIndex(e => e.Cccd, "UQ_BenhNhan_CCCD")
+                .IsUnique()
+                .HasFilter("[cccd] IS NOT NULL");
 
-            entity.HasIndex(e => e.SoDienThoai, "UQ_BenhNhan_SDT").IsUnique();
+            entity.HasIndex(e => e.SoDienThoai, "UQ_BenhNhan_SDT")
+                .IsUnique()
+                .HasFilter("[so_dien_thoai] IS NOT NULL");
 
             entity.HasIndex(e => e.MaBn, "UQ__benh_nha__0FE17EFE9C8D0F50").IsUnique();
 
@@ -259,16 +267,12 @@ public partial class DACNDbContext : DbContext
                 .HasColumnName("dia_chi_duong");
             entity.Property(e => e.DiaChiHuyen)
                 .HasMaxLength(100)
-                .IsUnicode(false)
-                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("dia_chi_huyen");
             entity.Property(e => e.DiaChiTinh)
                 .HasMaxLength(255)
                 .HasColumnName("dia_chi_tinh");
             entity.Property(e => e.DiaChiXa)
                 .HasMaxLength(100)
-                .IsUnicode(false)
-                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("dia_chi_xa");
             entity.Property(e => e.Email)
                 .HasMaxLength(120)
@@ -280,9 +284,13 @@ public partial class DACNDbContext : DbContext
                 .IsUnicode(false)
                 .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("gioi_tinh");
+            entity.Property(e => e.GhiChuDinhDanh)
+                .HasMaxLength(500)
+                .HasColumnName("ghi_chu_dinh_danh");
             entity.Property(e => e.HoTen)
                 .HasMaxLength(100)
                 .HasColumnName("ho_ten");
+            entity.Property(e => e.IsPotentialDuplicate).HasColumnName("is_potential_duplicate");
             entity.Property(e => e.MaBn)
                 .HasMaxLength(30)
                 .IsUnicode(false)
@@ -292,12 +300,34 @@ public partial class DACNDbContext : DbContext
             entity.Property(e => e.NgheNghiep)
                 .HasMaxLength(100)
                 .HasColumnName("nghe_nghiep");
+            entity.Property(e => e.NguoiGiamHo)
+                .HasMaxLength(120)
+                .HasColumnName("nguoi_giam_ho");
+            entity.Property(e => e.NguoiLienHeKhanCap)
+                .HasMaxLength(120)
+                .HasColumnName("nguoi_lien_he_khan_cap");
             entity.Property(e => e.QuocGia)
                 .HasMaxLength(50)
                 .HasColumnName("quoc_gia");
+            entity.Property(e => e.QuanHeGiamHo)
+                .HasMaxLength(60)
+                .HasColumnName("quan_he_giam_ho");
+            entity.Property(e => e.QuanHeLienHeKhanCap)
+                .HasMaxLength(60)
+                .HasColumnName("quan_he_lien_he_khan_cap");
             entity.Property(e => e.QuocTich)
                 .HasMaxLength(100)
                 .HasColumnName("quoc_tich");
+            entity.Property(e => e.SdtGiamHo)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
+                .HasColumnName("sdt_giam_ho");
+            entity.Property(e => e.SdtLienHeKhanCap)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
+                .HasColumnName("sdt_lien_he_khan_cap");
             entity.Property(e => e.SoDienThoai)
                 .HasMaxLength(20)
                 .IsUnicode(false)
@@ -367,8 +397,6 @@ public partial class DACNDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.GhiChu)
                 .HasMaxLength(255)
-                .IsUnicode(false)
-                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("ghi_chu");
             entity.Property(e => e.IdBo).HasColumnName("id_bo");
             entity.Property(e => e.IdDichVu).HasColumnName("id_dich_vu");
@@ -399,11 +427,18 @@ public partial class DACNDbContext : DbContext
                 .HasColumnType("datetime")
                 .HasColumnName("created_at");
             entity.Property(e => e.GhiChu).HasColumnName("ghi_chu");
+            entity.Property(e => e.BacSiDaDocKetQua)
+                .HasDefaultValue(false)
+                .HasColumnName("bac_si_da_doc_ket_qua");
+            entity.Property(e => e.BacSiDocKetQuaLuc)
+                .HasColumnType("datetime")
+                .HasColumnName("bac_si_doc_ket_qua_luc");
             entity.Property(e => e.HoanThanhLuc)
                 .HasColumnType("datetime")
                 .HasColumnName("hoan_thanh_luc");
             entity.Property(e => e.IdDvkt).HasColumnName("id_dvkt");
             entity.Property(e => e.IdLanKham).HasColumnName("id_lan_kham");
+            entity.Property(e => e.IdBacSiDocKetQua).HasColumnName("id_bac_si_doc_ket_qua");
             entity.Property(e => e.IdNguoiThucHien).HasColumnName("id_nguoi_thuc_hien");
             entity.Property(e => e.NhanLuc)
                 .HasColumnType("datetime")
@@ -1245,10 +1280,11 @@ public partial class DACNDbContext : DbContext
                 .IsUnicode(false)
                 .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("email");
+            entity.Property(e => e.AnhDaiDien)
+                .HasMaxLength(500)
+                .HasColumnName("anh_dai_dien");
             entity.Property(e => e.HoTen)
                 .HasMaxLength(150)
-                .IsUnicode(false)
-                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("ho_ten");
             entity.Property(e => e.HoatDong).HasColumnName("hoat_dong");
             entity.Property(e => e.KhoaPhong)
@@ -1283,8 +1319,6 @@ public partial class DACNDbContext : DbContext
             entity.Property(e => e.SoLanSai).HasColumnName("so_lan_sai");
             entity.Property(e => e.TenDangNhap)
                 .HasMaxLength(100)
-                .IsUnicode(false)
-                .UseCollation("SQL_Latin1_General_CP1_CI_AS")
                 .HasColumnName("ten_dang_nhap");
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("datetime")
@@ -1523,12 +1557,18 @@ public partial class DACNDbContext : DbContext
             entity.Property(e => e.HamLuong)
                 .HasMaxLength(50)
                 .HasColumnName("ham_luong");
+            entity.Property(e => e.HoatChat)
+                .HasMaxLength(200)
+                .HasColumnName("hoat_chat");
             entity.Property(e => e.HanSuDung).HasColumnName("han_su_dung");
             entity.Property(e => e.HangSx)
                 .HasMaxLength(100)
                 .HasColumnName("hang_sx");
             entity.Property(e => e.HoatDong).HasColumnName("hoat_dong");
             entity.Property(e => e.IdNhom).HasColumnName("id_nhom");
+            entity.Property(e => e.LoaiThuoc)
+                .HasMaxLength(60)
+                .HasColumnName("loai_thuoc");
             entity.Property(e => e.Ma)
                 .HasMaxLength(50)
                 .IsUnicode(false)

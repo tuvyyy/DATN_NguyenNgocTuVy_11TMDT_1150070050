@@ -1,13 +1,12 @@
-// src/pages/admin/thuoc/EmptyState.jsx
 import React from "react";
+import { CircleDollarSign } from "lucide-react";
 
 export default function EmptyState() {
   return (
-    <div className="h-full min-h-[220px] flex items-center justify-center">
-      <div className="text-center">
-        <div className="text-3xl">🧪</div>
-        <div className="mt-2 text-gray-600">Hãy chọn một thuốc ở cột bên trái để xem/thiết lập giá.</div>
-      </div>
+    <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center text-slate-500">
+      <CircleDollarSign size={34} className="mb-3 text-slate-300" />
+      <p className="font-medium text-slate-700">Chưa chọn thuốc</p>
+      <p className="mt-1 text-sm">Chọn một thuốc trong danh sách để xem và thiết lập giá.</p>
     </div>
   );
 }

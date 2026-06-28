@@ -33,6 +33,8 @@ public partial class LanKham
 
     public string? HuongXuTri { get; set; }
 
+    public string? BenhKemTheo { get; set; }
+
     public string? GhiChu { get; set; }
 
     public string? TrangThai { get; set; }
@@ -68,6 +70,8 @@ public partial class LanKham
     public virtual NguoiDung? IdTiepDonNavigation { get; set; }
 
     public virtual ICollection<LanKhamDichVu> LanKhamDichVus { get; set; } = new List<LanKhamDichVu>();
+
+    public virtual ICollection<LanKhamBenhKemTheo> LanKhamBenhKemTheos { get; set; } = new List<LanKhamBenhKemTheo>();
 
     public virtual ICollection<SinhHieu> SinhHieus { get; set; } = new List<SinhHieu>();
 }

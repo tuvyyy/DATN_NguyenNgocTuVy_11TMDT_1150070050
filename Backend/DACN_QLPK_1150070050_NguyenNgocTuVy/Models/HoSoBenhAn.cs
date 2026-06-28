@@ -15,6 +15,10 @@ public partial class HoSoBenhAn
 
     public long? IdNguoiTao { get; set; }
 
+    public int? IdKhuTiepDon { get; set; }
+
+    public int? IdQuayTiepDon { get; set; }
+
     public string? ChanDoan { get; set; }
 
     public string? GhiChu { get; set; }
@@ -26,6 +30,10 @@ public partial class HoSoBenhAn
     public virtual BenhNhan? IdBenhNhanNavigation { get; set; }
 
     public virtual NguoiDung? IdNguoiTaoNavigation { get; set; }
+
+    public virtual KhuTiepDon? IdKhuTiepDonNavigation { get; set; }
+
+    public virtual QuayTiepDon? IdQuayTiepDonNavigation { get; set; }
 
     public virtual ICollection<LanKham> LanKhams { get; set; } = new List<LanKham>();
 }

@@ -135,6 +135,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                     q.Id,
                     q.MaQuyen,
                     q.IdChucNang,
+                    MaChucNang = q.IdChucNangNavigation.MaChucNang,
                     ChucNang = q.IdChucNangNavigation.Ten,
                     q.Xem,
                     q.Them,
@@ -212,6 +213,7 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                     IdVaiTro = v.IdVaiTro,
                     IdQuyen = v.IdQuyen,
                     ChucNang = v.IdQuyenNavigation.IdChucNangNavigation.Ten,
+                    MaChucNang = v.IdQuyenNavigation.IdChucNangNavigation.MaChucNang,
                     MaQuyen = v.IdQuyenNavigation.MaQuyen
                 })
                 .ToListAsync();

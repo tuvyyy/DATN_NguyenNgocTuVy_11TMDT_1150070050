@@ -10,7 +10,6 @@ import {
   createDichVuGia,
   updateDichVuGia,
   softDeleteDichVuGia,
-  getGiaHienHanh,
 } from "../../../controllers/DanhMucDichVuController";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -26,16 +25,17 @@ const ymd = (d) => (d ? new Date(d).toISOString().split("T")[0] : "");
 // ========== Shared components ==========
 function Tabs({ tabs, active, onChange }) {
   return (
-    <div className="flex gap-2 border-b mb-6">
+    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
       {tabs.map((t) => (
         <button
           key={t.key}
+          type="button"
           onClick={() => onChange(t.key)}
           className={cx(
-            "px-4 py-2 rounded-t-md",
+            "h-9 rounded-md px-4 text-sm font-semibold transition-colors",
             active === t.key
-              ? "bg-white border-x border-t text-sky-700 font-semibold"
-              : "text-gray-600 hover:text-sky-700"
+              ? "bg-white text-sky-700 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
           )}
         >
           {t.label}
@@ -48,24 +48,24 @@ function Tabs({ tabs, active, onChange }) {
 function Pagination({ page, pageSize, total, onChange }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   return (
-    <div className="flex items-center justify-between mt-4 text-sm">
-      <div>
-        Trang <b>{page}</b> / {totalPages} — Tổng <b>{total}</b> dòng
+    <div className="flex h-14 shrink-0 items-center justify-between border-t border-slate-200 px-4 text-sm">
+      <div className="text-slate-600">
+        Trang <b>{page}</b>/{totalPages} · {total} dòng
       </div>
       <div className="flex gap-2">
         <button
-          className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
         >
-          ← Trước
+          Trước
         </button>
         <button
-          className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           disabled={page >= totalPages}
           onClick={() => onChange(page + 1)}
         >
-          Sau →
+          Sau
         </button>
       </div>
     </div>
@@ -118,29 +118,29 @@ function NhomDichVuTab() {
   }, []);
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
-      <div className="flex gap-3 items-end mb-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-end gap-3 border-b border-slate-200 p-4">
         <div className="flex-1">
-          <label className="block text-sm text-gray-600 mb-1">Tìm kiếm</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Tìm nhóm dịch vụ</label>
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="Tên / mô tả nhóm dịch vụ..."
-            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-200"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
           />
         </div>
         <button
           onClick={load}
-          className="h-10 px-4 rounded-lg bg-sky-600 text-white hover:bg-sky-700"
+          className="h-10 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-700"
         >
           Tìm
         </button>
       </div>
 
-      <div className="overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left bg-gray-50">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+            <tr className="text-left">
               <th className="p-3">#</th>
               <th className="p-3">Tên nhóm</th>
               <th className="p-3">Mô tả</th>
@@ -161,7 +161,7 @@ function NhomDichVuTab() {
               </tr>
             ) : (
               rows.map((r, idx) => (
-                <tr key={r.id} className="border-t">
+                <tr key={r.id} className="border-t border-slate-200 hover:bg-sky-50/60">
                   <td className="p-3">{idx + 1}</td>
                   <td className="p-3 font-medium">{r.ten}</td>
                   <td className="p-3 text-gray-600">{r.moTa || "—"}</td>
@@ -229,12 +229,12 @@ function DichVuTab() {
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="grid shrink-0 grid-cols-1 gap-3 border-b border-slate-200 p-4 md:grid-cols-4">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Phòng khám</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Phòng khám</label>
           <select
-            className="w-full border rounded-lg px-3 py-2"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             value={filters.idPhong}
             onChange={(e) =>
               setFilters((f) => ({ ...f, idPhong: e.target.value }))
@@ -249,9 +249,9 @@ function DichVuTab() {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Trạng thái</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</label>
           <select
-            className="w-full border rounded-lg px-3 py-2"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             value={filters.hoatDong}
             onChange={(e) =>
               setFilters((f) => ({ ...f, hoatDong: e.target.value }))
@@ -263,7 +263,7 @@ function DichVuTab() {
           </select>
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm text-gray-600 mb-1">Tìm kiếm</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Tìm dịch vụ</label>
           <div className="flex gap-2">
             <input
               placeholder="Mã / Tên dịch vụ…"
@@ -271,11 +271,11 @@ function DichVuTab() {
               onChange={(e) =>
                 setFilters((f) => ({ ...f, keyword: e.target.value }))
               }
-              className="flex-1 border rounded-lg px-3 py-2"
+              className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             />
             <button
               onClick={applyFilter}
-              className="px-4 rounded-lg bg-sky-600 text-white hover:bg-sky-700"
+              className="h-10 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-700"
             >
               Lọc
             </button>
@@ -283,10 +283,10 @@ function DichVuTab() {
         </div>
       </div>
 
-      <div className="overflow-auto mt-4">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left bg-gray-50">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+            <tr className="text-left">
               <th className="p-3">Mã</th>
               <th className="p-3">Tên dịch vụ</th>
               <th className="p-3">Nhóm</th>
@@ -311,7 +311,7 @@ function DichVuTab() {
               </tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.id} className="border-t">
+                <tr key={r.id} className="border-t border-slate-200 hover:bg-sky-50/60">
                   <td className="p-3 font-medium">{r.ma}</td>
                   <td className="p-3">{r.ten}</td>
                   <td className="p-3">{r.tenNhom ?? "—"}</td>
@@ -618,12 +618,12 @@ function BangGiaTab() {
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="grid shrink-0 grid-cols-1 gap-3 border-b border-slate-200 p-4 md:grid-cols-5">
         <div className="md:col-span-2">
-          <label className="block text-sm text-gray-600 mb-1">Dịch vụ</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Dịch vụ</label>
           <select
-            className="w-full border rounded-lg px-3 py-2"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             value={filters.idDichVu}
             onChange={(e) => setFilters((f) => ({ ...f, idDichVu: e.target.value }))}
           >
@@ -637,9 +637,9 @@ function BangGiaTab() {
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Phòng khám</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Phòng khám</label>
           <select
-            className="w-full border rounded-lg px-3 py-2"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             value={filters.idPhong}
             onChange={(e) => setFilters((f) => ({ ...f, idPhong: e.target.value }))}
           >
@@ -653,10 +653,10 @@ function BangGiaTab() {
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Tại ngày</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Tại ngày</label>
           <input
             type="date"
-            className="w-full border rounded-lg px-3 py-2"
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             value={filters.atDate}
             onChange={(e) => setFilters((f) => ({ ...f, atDate: e.target.value }))}
           />
@@ -675,23 +675,23 @@ function BangGiaTab() {
           </label>
           <button
             onClick={applyFilter}
-            className="ml-auto px-4 h-10 rounded-lg bg-sky-600 text-white hover:bg-sky-700"
+            className="ml-auto h-10 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-700"
           >
             Lọc
           </button>
           <button
             onClick={onAdd}
-            className="px-4 h-10 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+            className="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"
           >
             + Thêm giá
           </button>
         </div>
       </div>
 
-      <div className="overflow-auto mt-4">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left bg-gray-50">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+            <tr className="text-left">
               <th className="p-3">Dịch vụ</th>
               <th className="p-3">Phòng</th>
               <th className="p-3">Đơn giá</th>
@@ -716,7 +716,7 @@ function BangGiaTab() {
               </tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.id} className="border-t">
+                <tr key={r.id} className="border-t border-slate-200 hover:bg-sky-50/60">
                   <td className="p-3">
                     <div className="font-medium">{r.tenDichVu}</div>
                     <div className="text-gray-500 text-xs">{r.maDichVu}</div>
@@ -795,20 +795,21 @@ export default function DanhMucDichVu() {
   );
 
   return (
-    <div className="p-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
       <ToastContainer position="top-right" autoClose={2000} />
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-sky-800">Danh mục & Cấu hình DVKT</h1>
-        <p className="text-gray-600">
-          Quản lý nhóm dịch vụ, dịch vụ, và bảng giá theo phòng khám.
-        </p>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Danh mục dịch vụ</h1>
+          <p className="mt-1 text-sm text-slate-600">Quản lý nhóm dịch vụ, danh sách dịch vụ và bảng giá theo phòng khám.</p>
+        </div>
+        <Tabs tabs={tabs} active={active} onChange={setActive} />
       </div>
 
-      <Tabs tabs={tabs} active={active} onChange={setActive} />
-
-      {active === "nhom" && <NhomDichVuTab />}
-      {active === "dichvu" && <DichVuTab />}
-      {active === "banggia" && <BangGiaTab />}
+      <div className="min-h-0 flex-1 p-4">
+        {active === "nhom" && <NhomDichVuTab />}
+        {active === "dichvu" && <DichVuTab />}
+        {active === "banggia" && <BangGiaTab />}
+      </div>
     </div>
   );
 }

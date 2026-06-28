@@ -27,6 +27,8 @@ public partial class NguoiDung
 
     public string? Email { get; set; }
 
+    public string? AnhDaiDien { get; set; }
+
     public bool? HoatDong { get; set; }
 
     public DateTime? LanDangNhapCuoi { get; set; }
@@ -66,6 +68,8 @@ public partial class NguoiDung
     public virtual ICollection<LichSuDangNhap> LichSuDangNhaps { get; set; } = new List<LichSuDangNhap>();
 
     public virtual ICollection<NguoiDungVaiTro> NguoiDungVaiTros { get; set; } = new List<NguoiDungVaiTro>();
+
+    public virtual ICollection<NguoiDungKhu> NguoiDungKhus { get; set; } = new List<NguoiDungKhu>();
 
     public virtual ICollection<PhieuKho> PhieuKhoNguoiDuyetNavigations { get; set; } = new List<PhieuKho>();
 

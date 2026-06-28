@@ -45,7 +45,7 @@ export const getVnpayPaymentUrl = async (maHoaDon) => {
 };
 
 // ================== XÁC NHẬN THANH TOÁN ==================
-export const confirmPayment = async (idOrCode, idThuNgan) => {
+export const confirmPayment = async (idOrCode, idThuNgan, hinhThucThanhToan = "TIEN_MAT") => {
   try {
     const isStringCode = typeof idOrCode === "string";
     const url = isStringCode
@@ -53,7 +53,7 @@ export const confirmPayment = async (idOrCode, idThuNgan) => {
       : `${API_BASE}/xac-nhan-thanh-toan/${idOrCode}`;
     const res = await axios.put(
   url,
-  { idThuNgan }, // ✅ gửi đúng body JSON
+  { idThuNgan, hinhThucThanhToan },
   {
     headers: { "Content-Type": "application/json" },
   }
@@ -71,7 +71,7 @@ export const getReceipt = async (idOrCode) => {
   try {
     if (!idOrCode) return null;
     const isStringCode =
-      typeof idOrCode === "string" && idOrCode.toUpperCase().startsWith("HD-");
+      typeof idOrCode === "string" && !/^\d+$/.test(idOrCode.trim());
     const url = isStringCode
       ? `${API_BASE}/phieu-thu/ma/${idOrCode}`
       : `${API_BASE}/phieu-thu/${idOrCode}`;

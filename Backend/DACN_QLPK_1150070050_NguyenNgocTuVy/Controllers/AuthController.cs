@@ -21,18 +21,21 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
         private readonly IPasswordHasher _hasher;
         private readonly IHttpContextAccessor _http;
         private readonly IConfiguration _config;
+        private readonly IWebHostEnvironment _env;
 
 
         public AuthController(
             DACNDbContext db,
             IPasswordHasher hasher,
             IHttpContextAccessor http,
-            IConfiguration config)
+            IConfiguration config,
+            IWebHostEnvironment env)
         {
             _db = db;
             _hasher = hasher;
             _http = http;
             _config = config;
+            _env = env;
         }
 
         // ============================
@@ -247,8 +250,124 @@ namespace DACN_QLPK_1150070050_NguyenNgocTuVy.Controllers
                 user.Email,
                 user.SoDienThoai,
                 user.HoTen,
+                user.AnhDaiDien,
                 user.HoatDong,
                 roles = user.NguoiDungVaiTros.Select(x => x.IdVaiTroNavigation!.Ten)
+            });
+        }
+
+        // ============================
+        // POST api/auth/me/{id}/avatar
+        // ============================
+        [HttpPost("me/{id:long}/avatar")]
+        [RequestSizeLimit(5 * 1024 * 1024)]
+        public async Task<IActionResult> UploadAvatar(long id, [FromForm] IFormFile? file)
+        {
+            if (id <= 0) return BadRequest("Thiếu id.");
+            if (file == null || file.Length == 0) return BadRequest("Vui lòng chọn ảnh.");
+            if (file.Length > 5 * 1024 * 1024) return BadRequest("Ảnh vượt quá 5MB.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+            if (!allowed.Contains(ext))
+                return BadRequest("Chỉ chấp nhận ảnh jpg, jpeg, png, webp hoặc gif.");
+
+            var user = await _db.NguoiDungs.FindAsync(id);
+            if (user == null) return NotFound("Không tìm thấy tài khoản.");
+
+            var webRoot = _env.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRoot))
+            {
+                webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            }
+
+            var avatarFolder = Path.Combine(webRoot, "uploads", "avatars");
+            Directory.CreateDirectory(avatarFolder);
+
+            if (!string.IsNullOrWhiteSpace(user.AnhDaiDien) &&
+                user.AnhDaiDien.StartsWith("/uploads/avatars/", StringComparison.OrdinalIgnoreCase))
+            {
+                var oldFileName = Path.GetFileName(user.AnhDaiDien);
+                var oldPath = Path.Combine(avatarFolder, oldFileName);
+                if (System.IO.File.Exists(oldPath))
+                {
+                    System.IO.File.Delete(oldPath);
+                }
+            }
+
+            var fileName = $"avatar_{id}_{DateTime.UtcNow:yyyyMMddHHmmssfff}{ext}";
+            var fullPath = Path.Combine(avatarFolder, fileName);
+
+            await using (var stream = new FileStream(fullPath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            user.AnhDaiDien = $"/uploads/avatars/{fileName}";
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Cập nhật ảnh đại diện thành công",
+                anhDaiDien = user.AnhDaiDien
+            });
+        }
+
+        // ============================
+        // PUT api/auth/me/{id}
+        // ============================
+        [HttpPut("me/{id:long}")]
+        public async Task<IActionResult> UpdateMe(long id, [FromBody] UpdateProfileRequest req)
+        {
+            if (id <= 0) return BadRequest("Thiếu id.");
+
+            var user = await _db.NguoiDungs
+                .Include(u => u.NguoiDungVaiTros)
+                    .ThenInclude(m => m.IdVaiTroNavigation)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (user == null) return NotFound("Không tìm thấy tài khoản.");
+
+            var tenDangNhap = (req.TenDangNhap ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(tenDangNhap))
+                return BadRequest("Tên tài khoản không được để trống.");
+
+            if (tenDangNhap.Length > 100)
+                return BadRequest("Tên tài khoản tối đa 100 ký tự.");
+
+            var existed = await _db.NguoiDungs
+                .AnyAsync(x => x.Id != id && x.TenDangNhap == tenDangNhap);
+            if (existed)
+                return Conflict("Tên tài khoản đã tồn tại.");
+
+            user.TenDangNhap = tenDangNhap;
+            user.HoTen = string.IsNullOrWhiteSpace(req.HoTen) ? tenDangNhap : req.HoTen.Trim();
+            user.Email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim();
+            user.SoDienThoai = string.IsNullOrWhiteSpace(req.SoDienThoai) ? null : req.SoDienThoai.Trim();
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            var roles = user.NguoiDungVaiTros
+                .Where(x => x.IdVaiTroNavigation != null)
+                .Select(x => x.IdVaiTroNavigation!.Ten)
+                .ToArray();
+
+            return Ok(new
+            {
+                message = "Cập nhật tài khoản thành công",
+                user = new
+                {
+                    user.Id,
+                    user.TenDangNhap,
+                    user.HoTen,
+                    user.Email,
+                    user.SoDienThoai,
+                    user.AnhDaiDien,
+                    user.HoatDong,
+                    roles
+                }
             });
         }
 

@@ -9,9 +9,13 @@ public partial class PhongThucHien
 
     public string? TenPhong { get; set; }
 
+    public int? IdKhuTiepDon { get; set; }
+
     public int? Tang { get; set; }
 
     public bool? HoatDong { get; set; }
+
+    public virtual KhuTiepDon? IdKhuTiepDonNavigation { get; set; }
 
     public virtual ICollection<DvktPhong> DvktPhongs { get; set; } = new List<DvktPhong>();
 }
