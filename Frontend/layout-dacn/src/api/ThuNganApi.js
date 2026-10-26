@@ -2,6 +2,17 @@ import axios from "axios";
 
 const API_BASE = "https://localhost:7007/api/HoaDon";
 
+const getAuthToken = () => {
+  const direct = localStorage.getItem("access_token") || localStorage.getItem("token") || localStorage.getItem("jwt");
+  if (direct) return direct;
+  try {
+    const user = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    return user.accessToken || user.token || user.jwt || user.access_token || "";
+  } catch {
+    return "";
+  }
+};
+
 // ================== DANH SÁCH CHỜ THANH TOÁN ==================
 export const getWaitingPatients = async (type = "") => {
   try {
@@ -34,6 +45,7 @@ export const getVnpayPaymentUrl = async (maHoaDon) => {
       `https://localhost:7007/api/Vnpay/CreatePaymentUrl`,
       {
         params: { maHd: maHoaDon },
+        headers: getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {},
       }
     );
 
@@ -44,9 +56,20 @@ export const getVnpayPaymentUrl = async (maHoaDon) => {
   }
 };
 
+export const cancelVnpayPending = async (maHoaDon) => {
+  const token = getAuthToken();
+  const res = await axios.patch(
+    `https://localhost:7007/api/Vnpay/CancelPending/${encodeURIComponent(maHoaDon)}`,
+    null,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+  );
+  return res.data;
+};
+
 // ================== XÁC NHẬN THANH TOÁN ==================
 export const confirmPayment = async (idOrCode, idThuNgan, hinhThucThanhToan = "TIEN_MAT") => {
   try {
+    const token = getAuthToken();
     const isStringCode = typeof idOrCode === "string";
     const url = isStringCode
       ? `${API_BASE}/xac-nhan-thanh-toan/ma/${idOrCode}`
@@ -55,7 +78,10 @@ export const confirmPayment = async (idOrCode, idThuNgan, hinhThucThanhToan = "T
   url,
   { idThuNgan, hinhThucThanhToan },
   {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   }
 );
 

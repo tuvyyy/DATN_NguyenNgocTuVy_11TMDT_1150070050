@@ -111,7 +111,7 @@ const TIMELINE_ACTION_LABELS = {
   AREA_TRANSFER_ACCEPTED: "Nhận chuyển khu",
   AREA_TRANSFER_CANCELLED: "Hủy yêu cầu chuyển khu",
   CROSS_AREA_RECEIVED: "Nhận chuyển khu liên viện",
-  SERVICE_ORDER_DRAFT_SAVED: "Lưu nháp chỉ định",
+  SERVICE_ORDER_DRAFT_SAVED: "Lưu chỉ định",
   SERVICE_ORDER_CONFIRMED: "Xác nhận chỉ định dịch vụ",
   QUEUE_TICKETS_CREATED: "Cấp số thứ tự khám",
   QUEUE_ROOM_CHANGED: "Đổi phòng khám/hàng đợi",

@@ -114,7 +114,7 @@ public class TiepDonV2Controller : ControllerBase
 
         var today = DateTime.Today;
         var requestedArea = await FindAreaForLookupAsync(query);
-        var todayEncounterRaw = await _db.HoSoBenhAns
+        var todayEncounterRows = await _db.HoSoBenhAns
             .AsNoTracking()
             .Where(h => h.IdBenhNhan == patient.Id && h.NgayTao.HasValue && h.NgayTao.Value.Date == today)
             .OrderByDescending(h => h.NgayTao)
@@ -131,7 +131,11 @@ public class TiepDonV2Controller : ControllerBase
                 QuayMa = h.IdQuayTiepDonNavigation != null ? h.IdQuayTiepDonNavigation.MaQuay : null,
                 QuayTen = h.IdQuayTiepDonNavigation != null ? h.IdQuayTiepDonNavigation.TenQuay : null
             })
-            .FirstOrDefaultAsync();
+            .ToListAsync();
+
+        var todayEncounterRaw = todayEncounterRows
+            .FirstOrDefault(h => _status.IsActiveReceptionFlow(h.TrangThai))
+            ?? todayEncounterRows.FirstOrDefault();
 
         var todayEncounter = todayEncounterRaw == null
             ? null
@@ -141,6 +145,7 @@ public class TiepDonV2Controller : ControllerBase
                 todayEncounterRaw.MaHs,
                 TrangThai = _status.NormalizeStatus(todayEncounterRaw.TrangThai),
                 todayEncounterRaw.NgayTao,
+                IsActive = _status.IsActiveReceptionFlow(todayEncounterRaw.TrangThai),
                 KhuTiepDon = BuildAreaDto(todayEncounterRaw.IdKhuTiepDon, todayEncounterRaw.KhuMa, todayEncounterRaw.KhuTen),
                 QuayTiepDon = BuildCounterDto(todayEncounterRaw.IdQuayTiepDon, todayEncounterRaw.QuayMa, todayEncounterRaw.QuayTen),
                 IsOtherArea = requestedArea?.Id != null
@@ -323,6 +328,31 @@ public class TiepDonV2Controller : ControllerBase
                 CreatedAt = now
             };
             _db.BenhNhans.Add(existing);
+        }
+
+        if (!isNewPatient && existing != null)
+        {
+            var activeEncounterCandidates = await _db.HoSoBenhAns
+                .AsNoTracking()
+                .Where(h => h.IdBenhNhan == existing.Id)
+                .OrderByDescending(h => h.NgayTao)
+                .Take(20)
+                .Select(h => new { h.Id, h.MaHs, h.TrangThai })
+                .ToListAsync();
+
+            foreach (var activeEncounter in activeEncounterCandidates.Where(h => _status.IsActiveReceptionFlow(h.TrangThai)))
+            {
+                var identityGuard = await GetEncounterMutationGuardAsync(activeEncounter.Id);
+                if (!identityGuard.BlocksCancel) continue;
+
+                return Conflict(new
+                {
+                    state = "PATIENT_IDENTITY_CLINICAL_OR_FINANCIAL_LOCKED",
+                    message = $"Hồ sơ {activeEncounter.MaHs} đã thanh toán, đang chờ giao dịch hoặc đã thực hiện dịch vụ. Không được sửa trực tiếp thông tin định danh người bệnh tại tiếp đón.",
+                    encounterId = activeEncounter.Id,
+                    details = identityGuard.Details
+                });
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(cleanedCccd))
@@ -534,14 +564,41 @@ public class TiepDonV2Controller : ControllerBase
                     x.MaDatLich == intake.AppointmentCode!.Trim()
                     && x.IdBenhNhan == dto.IdBenhNhan);
 
-            if (matchedAppointment != null)
+            if (matchedAppointment == null)
             {
-                var expectedDateTime = matchedAppointment.Ngay.ToDateTime(matchedAppointment.GioBatDau);
-                isLateAppointment = now > expectedDateTime.AddMinutes(15);
-                matchedAppointment.TrangThai = "DA_CHECKIN";
-                matchedAppointment.UpdatedAt = now;
-                intake.IsAppointmentLate = isLateAppointment;
+                return BadRequest(new
+                {
+                    state = "APPOINTMENT_NOT_FOUND",
+                    message = "Mã lịch hẹn không tồn tại hoặc không thuộc bệnh nhân đang tiếp đón."
+                });
             }
+
+            var appointmentStatus = (matchedAppointment.TrangThai ?? string.Empty).Trim().ToUpperInvariant();
+            if (appointmentStatus is "DA_HUY" or "HUY" or "CANCELLED" or "DA_CHECKIN")
+            {
+                return Conflict(new
+                {
+                    state = "APPOINTMENT_NOT_AVAILABLE",
+                    message = appointmentStatus == "DA_CHECKIN"
+                        ? "Lịch hẹn đã được check-in, không thể tiếp đón lần nữa."
+                        : "Lịch hẹn đã hủy, không thể dùng để tiếp đón."
+                });
+            }
+
+            if (matchedAppointment.Ngay != DateOnly.FromDateTime(today))
+            {
+                return Conflict(new
+                {
+                    state = "APPOINTMENT_WRONG_DATE",
+                    message = $"Lịch hẹn thuộc ngày {matchedAppointment.Ngay:dd/MM/yyyy}, không thể check-in cho ngày {today:dd/MM/yyyy}."
+                });
+            }
+
+            var expectedDateTime = matchedAppointment.Ngay.ToDateTime(matchedAppointment.GioBatDau);
+            isLateAppointment = now > expectedDateTime.AddMinutes(15);
+            matchedAppointment.TrangThai = "DA_CHECKIN";
+            matchedAppointment.UpdatedAt = now;
+            intake.IsAppointmentLate = isLateAppointment;
         }
 
         if (dto.IdHoSo.HasValue && dto.IdHoSo.Value > 0)
@@ -561,8 +618,63 @@ public class TiepDonV2Controller : ControllerBase
                 return BadRequest(new { message = "HĂ¡Â»â€œ sĂ†Â¡ hiĂ¡Â»â€¡n tĂ¡ÂºÂ¡i khÄ‚Â´ng cho phÄ‚Â©p Reception cĂ¡ÂºÂ­p nhĂ¡ÂºÂ­t thÄ‚Â´ng tin tiĂ¡ÂºÂ¿p Ă„â€˜Ä‚Â³n." });
             }
 
+            var updateGuard = await GetEncounterMutationGuardAsync(hoSoUpdate.Id);
+            if (updateGuard.BlocksAreaTransfer)
+            {
+                return BadRequest(new
+                {
+                    state = "ENCOUNTER_CLINICAL_OR_FINANCIAL_LOCKED",
+                    message = "Hồ sơ đã thanh toán hoặc đã thực hiện dịch vụ. Không được sửa trực tiếp thông tin tiếp đón, khu, quầy hay đối tượng thanh toán.",
+                    details = updateGuard.Details
+                });
+            }
+
+            var previousIntake = DeserializeEncounterMeta(hoSoUpdate.GhiChu);
+            if (HasFinancialClassificationChanged(previousIntake, intake))
+            {
+                var encounterVisitIds = hoSoUpdate.LanKhams.Select(x => x.Id).ToList();
+                var openInvoices = await _db.HoaDons
+                    .AsNoTracking()
+                    .Where(h => h.IdLanKham.HasValue
+                        && encounterVisitIds.Contains(h.IdLanKham.Value)
+                        && h.TrangThai != "HUY"
+                        && h.TrangThai != "DA_HUY"
+                        && h.TrangThai != "DA_THANH_TOAN"
+                        && h.ChiTietHoaDons.Any())
+                    .Select(h => new
+                    {
+                        h.Id,
+                        h.MaHd,
+                        h.LoaiHoaDon,
+                        h.TrangThai,
+                        h.TongTien
+                    })
+                    .ToListAsync();
+
+                if (openInvoices.Count > 0)
+                {
+                    return Conflict(new
+                    {
+                        state = "ENCOUNTER_FINANCIAL_CLASSIFICATION_LOCKED",
+                        message = "Hồ sơ đã sinh hóa đơn. Không được đổi nguồn tiếp nhận, loại khám, đối tượng thanh toán hoặc thông tin BHYT trực tiếp vì có thể làm sai giá. Vui lòng hủy/lập lại phiếu theo quy trình điều chỉnh.",
+                        invoices = openInvoices
+                    });
+                }
+            }
+
             var oldAreaId = hoSoUpdate.IdKhuTiepDon;
             var isCrossAreaUpdate = oldAreaId.HasValue && oldAreaId.Value != areaSelection.Area.Id;
+            if (isCrossAreaUpdate && _status.IsActiveReceptionFlow(hoSoUpdate.TrangThai))
+            {
+                var oldArea = await _db.KhuTiepDons.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == oldAreaId!.Value);
+                return Conflict(new
+                {
+                    state = "ACTIVE_ENCOUNTER_IN_OTHER_AREA",
+                    message = $"Trùng hồ sơ {hoSoUpdate.MaHs}, đã tiếp đón ngày {hoSoUpdate.NgayTao:dd/MM/yyyy HH:mm} tại {oldArea?.TenKhu ?? "khu khác"}. Khu hiện tại không được tiếp đón. Khu cũ phải hủy tiếp đón trước.",
+                    encounter = BuildEncounterRef(hoSoUpdate)
+                });
+            }
             if (isCrossAreaUpdate && string.IsNullOrWhiteSpace(intake?.LyDoChuyenKhu))
             {
                 return BadRequest(new
@@ -729,6 +841,28 @@ public class TiepDonV2Controller : ControllerBase
             .Where(h => h.IdBenhNhan == dto.IdBenhNhan && h.NgayTao.HasValue && h.NgayTao.Value.Date == today)
             .OrderByDescending(h => h.NgayTao)
             .ToListAsync();
+
+        var oldOpenRecord = (await _db.HoSoBenhAns
+                .AsNoTracking()
+                .Include(h => h.IdKhuTiepDonNavigation)
+                .Where(h => h.IdBenhNhan == dto.IdBenhNhan
+                    && h.NgayTao.HasValue
+                    && h.NgayTao.Value.Date < today)
+                .OrderByDescending(h => h.NgayTao)
+                .Take(20)
+                .ToListAsync())
+            .FirstOrDefault(h => _status.IsActiveReceptionFlow(h.TrangThai));
+
+        if (oldOpenRecord != null)
+        {
+            await tx.RollbackAsync();
+            return Conflict(new
+            {
+                state = "OLD_ENCOUNTER_NOT_CLOSED",
+                message = $"Bệnh nhân còn hồ sơ {oldOpenRecord.MaHs} ngày {oldOpenRecord.NgayTao:dd/MM/yyyy} chưa tất toán/đóng hồ sơ. Vui lòng xử lý hồ sơ cũ trước khi tiếp đón lượt mới.",
+                encounter = BuildEncounterRef(oldOpenRecord)
+            });
+        }
 
         var activeRecord = todayRecords.FirstOrDefault(r => _status.IsActiveReceptionFlow(r.TrangThai));
         if (activeRecord != null)
@@ -995,7 +1129,7 @@ public class TiepDonV2Controller : ControllerBase
             return BadRequest(new { message = "TrĂ¡ÂºÂ¡ng thÄ‚Â¡i hiĂ¡Â»â€¡n tĂ¡ÂºÂ¡i khÄ‚Â´ng cho phÄ‚Â©p hĂ¡Â»Â§y hĂ¡Â»â€œ sĂ†Â¡ tiĂ¡ÂºÂ¿p Ă„â€˜Ä‚Â³n." });
         }
 
-        var guard = await GetEncounterMutationGuardAsync(hoSo.Id, hoSo.IdBenhNhan, hoSo.NgayTao);
+        var guard = await GetEncounterMutationGuardAsync(hoSo.Id);
         if (guard.BlocksCancel)
         {
             return BadRequest(new
@@ -1033,11 +1167,10 @@ public class TiepDonV2Controller : ControllerBase
             }
         }
 
+        var encounterVisitIds = hoSo.LanKhams.Select(x => x.Id).ToList();
         var relatedInvoices = await _db.HoaDons
-            .Where(h => h.IdBenhNhan == hoSo.IdBenhNhan
-                && h.NgayTao.HasValue
-                && hoSo.NgayTao.HasValue
-                && h.NgayTao.Value.Date == hoSo.NgayTao.Value.Date
+            .Where(h => h.IdLanKham.HasValue
+                && encounterVisitIds.Contains(h.IdLanKham.Value)
                 && h.TrangThai != "DA_THANH_TOAN")
             .ToListAsync();
 
@@ -1101,7 +1234,7 @@ public class TiepDonV2Controller : ControllerBase
         if (hoSo.IdKhuTiepDon == req.IdKhuTiepDonMoi)
             return BadRequest(new { message = "Hồ sơ đã thuộc khu được chọn." });
 
-        var guard = await GetEncounterMutationGuardAsync(hoSo.Id, hoSo.IdBenhNhan, hoSo.NgayTao);
+        var guard = await GetEncounterMutationGuardAsync(hoSo.Id);
         if (guard.BlocksAreaTransfer)
             return BadRequest(new { state = guard.State, message = guard.Message, details = guard.Details });
 
@@ -1172,6 +1305,10 @@ public class TiepDonV2Controller : ControllerBase
         var status = _status.NormalizeStatus(hoSo.TrangThai);
         if (status != HoSoTrangThaiService.ChoChuyenKhu)
             return BadRequest(new { message = "Hồ sơ chưa ở trạng thái chờ chuyển khu." });
+
+        var guard = await GetEncounterMutationGuardAsync(hoSo.Id);
+        if (guard.BlocksAreaTransfer)
+            return BadRequest(new { state = guard.State, message = guard.Message, details = guard.Details });
 
         var transferLog = await GetLatestAreaTransferLogAsync(id);
         var targetAreaId = ReadIntFromLogMetadata(transferLog?.Metadata, "targetAreaId");
@@ -2160,6 +2297,20 @@ public class TiepDonV2Controller : ControllerBase
     private static bool IsLooseEqual(string? value, string expected)
         => string.Equals(ToLooseKey(value), ToLooseKey(expected), StringComparison.OrdinalIgnoreCase);
 
+    private static bool HasFinancialClassificationChanged(ReceptionInfoDto previous, ReceptionInfoDto? current)
+    {
+        if (current == null) return false;
+
+        return !IsLooseEqual(previous.NguonTiepNhan, current.NguonTiepNhan ?? string.Empty)
+            || !IsLooseEqual(previous.LoaiKham, current.LoaiKham ?? string.Empty)
+            || !IsLooseEqual(previous.DoiTuongThanhToan, current.DoiTuongThanhToan ?? string.Empty)
+            || !IsLooseEqual(previous.InsuranceSoThe, current.InsuranceSoThe ?? string.Empty)
+            || previous.InsuranceNgayHetHan?.Date != current.InsuranceNgayHetHan?.Date
+            || !IsLooseEqual(previous.InsuranceNoiDangKyKcb, current.InsuranceNoiDangKyKcb ?? string.Empty)
+            || !IsLooseEqual(previous.InsuranceTuyenKham, current.InsuranceTuyenKham ?? string.Empty)
+            || !IsLooseEqual(previous.InsuranceGiayChuyenTuyen, current.InsuranceGiayChuyenTuyen ?? string.Empty);
+    }
+
     private static string ToLooseKey(string? value)
     {
         var cleaned = Clean(value);
@@ -2389,7 +2540,11 @@ public class TiepDonV2Controller : ControllerBase
             errors["so_dien_thoai"] = "Số điện thoại không đúng định dạng Việt Nam.";
         }
 
-        if (!string.IsNullOrWhiteSpace(req.CCCD) && !CitizenIdRegex.IsMatch(req.CCCD.Trim()))
+        if (string.IsNullOrWhiteSpace(req.CCCD))
+        {
+            errors["cccd"] = "CCCD/CMND là bắt buộc.";
+        }
+        else if (!CitizenIdRegex.IsMatch(req.CCCD.Trim()))
         {
             errors["cccd"] = "CCCD/CMND phải có 9 hoặc 12 chữ số.";
         }
@@ -2459,6 +2614,19 @@ public class TiepDonV2Controller : ControllerBase
             errors["muc_uu_tien"] = "Mức ưu tiên là bắt buộc.";
         if (string.IsNullOrWhiteSpace(info.DoiTuongThanhToan))
             errors["doi_tuong_thanh_toan"] = "Đối tượng thanh toán là bắt buộc.";
+
+        if (!string.IsNullOrWhiteSpace(info.NguonTiepNhan)
+            && !NguonTiepNhanCatalog.Values.Contains(info.NguonTiepNhan, StringComparer.OrdinalIgnoreCase))
+            errors["nguon_tiep_nhan"] = "Nguồn tiếp nhận không thuộc danh mục cho phép.";
+        if (!string.IsNullOrWhiteSpace(info.LoaiKham)
+            && !LoaiKhamCatalog.Values.Contains(info.LoaiKham, StringComparer.OrdinalIgnoreCase))
+            errors["loai_kham"] = "Loại khám không thuộc danh mục cho phép.";
+        if (!string.IsNullOrWhiteSpace(info.MucUuTien)
+            && !MucUuTienCatalog.Values.Contains(info.MucUuTien, StringComparer.OrdinalIgnoreCase))
+            errors["muc_uu_tien"] = "Mức ưu tiên không thuộc danh mục cho phép.";
+        if (!string.IsNullOrWhiteSpace(info.DoiTuongThanhToan)
+            && !DoiTuongThanhToanCatalog.Values.Contains(info.DoiTuongThanhToan, StringComparer.OrdinalIgnoreCase))
+            errors["doi_tuong_thanh_toan"] = "Đối tượng thanh toán không thuộc danh mục cho phép.";
 
         if (IsLooseEqual(info.NguonTiepNhan, "Đặt lịch") && string.IsNullOrWhiteSpace(info.AppointmentCode))
         {
@@ -2704,6 +2872,7 @@ public class TiepDonV2Controller : ControllerBase
 
     private sealed record EncounterMutationGuard(
         bool HasPaidInvoice,
+        bool HasPendingElectronicPayment,
         bool HasPerformedService,
         bool BlocksCancel,
         bool BlocksAreaTransfer,
@@ -2711,11 +2880,11 @@ public class TiepDonV2Controller : ControllerBase
         string Message,
         object Details);
 
-    private sealed record GuardInvoiceSnapshot(long Id, string MaHd, string? LoaiHoaDon, decimal? TongTien);
+    private sealed record GuardInvoiceSnapshot(long Id, string MaHd, string? LoaiHoaDon, decimal? TongTien, string? TrangThai, string? HinhThucTt, string? MaGiaoDich);
     private sealed record GuardPerformedServiceSnapshot(long Id, long? IdLanKham, long? IdDichVu, string? TrangThai);
     private sealed record GuardPerformedClsSnapshot(long Id, long IdLanKham, long? IdDvkt, string? TrangThai);
 
-    private async Task<EncounterMutationGuard> GetEncounterMutationGuardAsync(long encounterId, long? patientId, DateTime? encounterDate)
+    private async Task<EncounterMutationGuard> GetEncounterMutationGuardAsync(long encounterId)
     {
         var visitIds = await _db.LanKhams
             .AsNoTracking()
@@ -2730,27 +2899,18 @@ public class TiepDonV2Controller : ControllerBase
                 .AsNoTracking()
                 .Where(h => h.IdLanKham.HasValue
                     && visitIds.Contains(h.IdLanKham.Value)
-                    && h.TrangThai == "DA_THANH_TOAN")
-                .Select(h => new GuardInvoiceSnapshot(h.Id, h.MaHd, h.LoaiHoaDon, h.TongTien))
-                .ToListAsync();
-        }
-
-        var paidInvoicesByDay = new List<GuardInvoiceSnapshot>();
-        if (patientId.HasValue && encounterDate.HasValue)
-        {
-            var date = encounterDate.Value.Date;
-            paidInvoicesByDay = await _db.HoaDons
-                .AsNoTracking()
-                .Where(h => h.IdBenhNhan == patientId.Value
-                    && h.NgayTao.HasValue
-                    && h.NgayTao.Value.Date == date
-                    && h.TrangThai == "DA_THANH_TOAN")
-                .Select(h => new GuardInvoiceSnapshot(h.Id, h.MaHd, h.LoaiHoaDon, h.TongTien))
+                    && (h.TrangThai == "DA_THANH_TOAN" || h.TrangThai == "DANG_THANH_TOAN"))
+                .Select(h => new GuardInvoiceSnapshot(h.Id, h.MaHd, h.LoaiHoaDon, h.TongTien, h.TrangThai, h.HinhThucTt, h.MaGiaoDichVnpay))
                 .ToListAsync();
         }
 
         var paidInvoices = paidInvoicesByVisit
-            .Concat(paidInvoicesByDay)
+            .Where(x => string.Equals(x.TrangThai, "DA_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(x => x.Id)
+            .Select(g => g.First())
+            .ToList();
+        var pendingElectronicPayments = paidInvoicesByVisit
+            .Where(x => string.Equals(x.TrangThai, "DANG_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
             .GroupBy(x => x.Id)
             .Select(g => g.First())
             .ToList();
@@ -2784,14 +2944,19 @@ public class TiepDonV2Controller : ControllerBase
         }
 
         var hasPaidInvoice = paidInvoices.Count > 0;
+        var hasPendingElectronicPayment = pendingElectronicPayments.Count > 0;
         var hasPerformedService = performedDv.Count > 0 || performedCls.Count > 0;
-        var blocks = hasPaidInvoice || hasPerformedService;
-        var state = hasPaidInvoice
+        var blocks = hasPaidInvoice || hasPendingElectronicPayment || hasPerformedService;
+        var state = hasPendingElectronicPayment
+            ? "ENCOUNTER_HAS_PENDING_ELECTRONIC_PAYMENT"
+            : hasPaidInvoice
             ? "ENCOUNTER_HAS_PAID_INVOICE"
             : hasPerformedService
                 ? "ENCOUNTER_HAS_PERFORMED_SERVICE"
                 : "OK";
-        var message = hasPaidInvoice
+        var message = hasPendingElectronicPayment
+            ? "Hồ sơ đang có giao dịch QR/VNPay chờ kết quả. Vui lòng hoàn tất hoặc hủy giao dịch trước khi sửa, hủy hay chuyển khu."
+            : hasPaidInvoice
             ? "Hồ sơ đã có hóa đơn thanh toán, không cho phép hủy/chuyển khu trực tiếp."
             : hasPerformedService
                 ? "Hồ sơ đã có dịch vụ thực hiện/có kết quả, không cho phép hủy/chuyển khu trực tiếp."
@@ -2799,6 +2964,7 @@ public class TiepDonV2Controller : ControllerBase
 
         return new EncounterMutationGuard(
             hasPaidInvoice,
+            hasPendingElectronicPayment,
             hasPerformedService,
             blocks,
             blocks,
@@ -2807,6 +2973,7 @@ public class TiepDonV2Controller : ControllerBase
             new
             {
                 paidInvoices,
+                pendingElectronicPayments,
                 performedServices = performedDv,
                 performedCls
             });

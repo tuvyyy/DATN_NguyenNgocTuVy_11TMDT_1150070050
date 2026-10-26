@@ -428,7 +428,7 @@ Khu phòng: ${service.tenKhuTiepDon || service.maKhuTiepDon || "Chưa map khu"}`
       return;
     }
 
-    const actionText = mode === "draft" ? "Lưu nháp" : "Xác nhận dịch vụ";
+    const actionText = mode === "draft" ? "Lưu chỉ định" : "Xác nhận dịch vụ";
     const serviceMode = inferServiceMode(encounterInfo?.encounter?.visitType);
     const nextStatus = mode === "draft" ? "DỊCH_VỤ_NHÁP" : "CHỜ_THANH_TOÁN hoặc CHỜ_KHÁM";
     setModal({
@@ -480,7 +480,7 @@ Trạng thái tiếp theo: ${nextStatus}`,
       setModal({
         open: true,
         type: "error",
-        title: mode === "draft" ? "Lưu nháp thất bại" : "Xác nhận dịch vụ thất bại",
+        title: mode === "draft" ? "Lưu chỉ định thất bại" : "Xác nhận dịch vụ thất bại",
         message: extractMessage(res, "Không lưu được phiếu dịch vụ."),
         details: invalidServices.length
           ? invalidServices
@@ -497,7 +497,7 @@ Trạng thái tiếp theo: ${nextStatus}`,
   setModal({
       open: true,
       type: "success",
-      title: mode === "draft" ? "Đã lưu nháp phiếu dịch vụ" : "Xác nhận dịch vụ thành công",
+      title: mode === "draft" ? "Đã lưu chỉ định dịch vụ" : "Xác nhận dịch vụ thành công",
       message: `Mã phiếu dịch vụ: ${data.orderCode || "--"}`,
       details: `Tạm tính: ${Number(data.temporaryTotal || tamTinh).toLocaleString("vi-VN")} đ
 Trạng thái hồ sơ: ${statusText}`,
@@ -928,7 +928,7 @@ Trạng thái hồ sơ: ${statusText}`,
                   className="inline-flex items-center gap-1 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving === "draft" ? <Loader2 size={14} className="animate-spin" /> : <ClipboardList size={14} />}
-                  {saving === "draft" ? "Đang lưu..." : "Lưu nháp"}
+                  {saving === "draft" ? "Đang lưu..." : "Lưu chỉ định"}
                 </button>
                 <button
                   type="button"

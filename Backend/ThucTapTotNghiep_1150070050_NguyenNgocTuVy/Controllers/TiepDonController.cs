@@ -37,12 +37,30 @@ public class TiepDonController : ControllerBase
     private readonly DACNDbContext _db;
     private readonly ICodeGenerator _code;
     private readonly IHoSoTrangThaiService _hoSoTrangThai;
+    private readonly IConfiguration _configuration;
 
-    public TiepDonController(DACNDbContext db, ICodeGenerator code, IHoSoTrangThaiService hoSoTrangThai)
+    public TiepDonController(
+        DACNDbContext db,
+        ICodeGenerator code,
+        IHoSoTrangThaiService hoSoTrangThai,
+        IConfiguration configuration)
     {
         _db = db;
         _code = code;
         _hoSoTrangThai = hoSoTrangThai;
+        _configuration = configuration;
+    }
+
+    private IActionResult? RejectLegacyMutation()
+    {
+        if (_configuration.GetValue("Reception:AllowLegacyMutations", false))
+            return null;
+
+        return StatusCode(StatusCodes.Status410Gone, new
+        {
+            state = "LEGACY_RECEPTION_MUTATION_DISABLED",
+            message = "API tiếp đón cũ đã ngừng cho phép ghi dữ liệu vì có thể bỏ qua khu/quầy, kiểm soát tài chính và state machine. Vui lòng sử dụng API /api/tiepdon/v2."
+        });
     }
 
     [HttpGet("list-today")]
@@ -100,6 +118,9 @@ public class TiepDonController : ControllerBase
     [HttpPost("create-full")]
     public async Task<IActionResult> CreateFullReception([FromBody] FullReceptionRequest req)
     {
+        var legacyBlocked = RejectLegacyMutation();
+        if (legacyBlocked != null) return legacyBlocked;
+
         var denied = await EnsurePermissionAsync("them");
         if (denied != null) return denied;
 
@@ -260,6 +281,9 @@ public class TiepDonController : ControllerBase
     [HttpPost("patients")]
     public async Task<IActionResult> CreatePatient([FromBody] PatientCreateRequest req)
     {
+        var legacyBlocked = RejectLegacyMutation();
+        if (legacyBlocked != null) return legacyBlocked;
+
         var denied = await EnsurePermissionAsync("them");
         if (denied != null) return denied;
 
@@ -440,6 +464,9 @@ public class TiepDonController : ControllerBase
     [HttpPost("records")]
     public async Task<IActionResult> CreateRecord([FromBody] RecordCreateDto dto)
     {
+        var legacyBlocked = RejectLegacyMutation();
+        if (legacyBlocked != null) return legacyBlocked;
+
         var denied = await EnsurePermissionAsync("them");
         if (denied != null) return denied;
 
@@ -668,6 +695,9 @@ public class TiepDonController : ControllerBase
     [HttpPatch("{id:long}/status")]
     public async Task<IActionResult> UpdateReceptionStatus(long id, [FromBody] ReceptionStatusUpdateDto dto)
     {
+        var legacyBlocked = RejectLegacyMutation();
+        if (legacyBlocked != null) return legacyBlocked;
+
         var denied = await EnsurePermissionAsync("sua");
         if (denied != null) return denied;
 
@@ -707,6 +737,9 @@ public class TiepDonController : ControllerBase
     [HttpPatch("cancel/{id}")]
     public async Task<IActionResult> CancelReception(long id)
     {
+        var legacyBlocked = RejectLegacyMutation();
+        if (legacyBlocked != null) return legacyBlocked;
+
         var denied = await EnsurePermissionAsync("xoa");
         if (denied != null) return denied;
 

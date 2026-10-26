@@ -95,10 +95,11 @@ export default function ModalTraKetQua({ open, onClose, chiDinh, onSaved }) {
       await loadResult();
       await onSaved?.();
     } catch (error) {
+      const isUnpaid = error?.response?.data?.code === "DVKT_CHUA_THANH_TOAN";
       Swal.fire(
-        "Không thể lưu kết quả",
+        isUnpaid ? "Bệnh nhân chưa đóng tiền" : "Không thể lưu kết quả",
         error?.response?.data?.message || error?.message || "Vui lòng kiểm tra dữ liệu và thử lại.",
-        "error"
+        isUnpaid ? "warning" : "error"
       );
     } finally {
       setSaving(false);

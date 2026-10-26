@@ -202,8 +202,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (permissionError != null)
                 return permissionError;
 
-            if (await HasPaidMedicineItems(id))
-                return BadRequest(new { message = "Đơn thuốc đã có thuốc thanh toán, không thể cập nhật trực tiếp." });
+            if (await HasFinanciallyLockedMedicineItems(id))
+                return Conflict(new { state = "PRESCRIPTION_ALREADY_IN_INVOICE", message = "Đơn thuốc đã được đưa vào hóa đơn, không thể cập nhật trực tiếp. Vui lòng hủy/lập lại hóa đơn theo quy trình điều chỉnh." });
 
             var oldCt = await _db.ChiTietDonThuocs.Where(x => x.IdDonThuoc == id).ToListAsync();
             var beforeAudit = new
@@ -316,8 +316,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (permissionError != null)
                 return permissionError;
 
-            if (await HasPaidMedicineItems(id))
-                return BadRequest(new { message = "Đơn thuốc đã có thuốc thanh toán, không thể xóa trực tiếp." });
+            if (await HasFinanciallyLockedMedicineItems(id))
+                return Conflict(new { state = "PRESCRIPTION_ALREADY_IN_INVOICE", message = "Đơn thuốc đã được đưa vào hóa đơn, không thể xóa trực tiếp. Vui lòng hủy/lập lại hóa đơn theo quy trình điều chỉnh." });
 
             var idLanKham = don.IdLanKham;
             using var tx = await _db.Database.BeginTransactionAsync();
@@ -416,7 +416,9 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                     .AsNoTracking()
                     .ToListAsync();
 
-                var paidIds = await GetPaidMedicineDetailIds(chiTiet.Select(x => x.Id).ToList());
+                var detailIds = chiTiet.Select(x => x.Id).ToList();
+                var paidIds = await GetPaidMedicineDetailIds(detailIds);
+                var lockedIds = await GetLockedMedicineDetailIds(detailIds);
                 var latestPaper = await GetLatestConclusionPaper(idLanKham);
 
                 var result = new
@@ -433,7 +435,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                     TenBenh = don.IdLanKhamNavigation?.IdBenhNavigation?.Ten,
                     BenhKemTheo = don.IdLanKhamNavigation?.BenhKemTheo,
                     NgayHen = latestPaper?.NgayHen,
-                    CanEdit = !IsVisitLocked(don.IdLanKhamNavigation?.TrangThai) && !paidIds.Any(),
+                    CanEdit = !IsVisitLocked(don.IdLanKhamNavigation?.TrangThai) && !lockedIds.Any(),
                     CanPrint = IsVisitConcluded(don.IdLanKhamNavigation?.TrangThai),
                     ChiTiet = chiTiet.Select(x => new
                     {
@@ -447,7 +449,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                         DonGia = x.IdThuocNavigation?.DonGia,
                         SoLuongTon = x.IdThuocNavigation?.SoLuongTon,
                         DaThanhToan = paidIds.Contains(x.Id),
-                        CanEdit = !paidIds.Contains(x.Id) && !IsVisitLocked(don.IdLanKhamNavigation?.TrangThai),
+                        DaLapHoaDon = lockedIds.Contains(x.Id),
+                        CanEdit = !lockedIds.Contains(x.Id) && !IsVisitLocked(don.IdLanKhamNavigation?.TrangThai),
                         x.SoLuong,
                         x.DonVi,
                         x.DungTich,
@@ -529,7 +532,9 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 .Where(x => x.IdDonThuoc.HasValue && donIds.Contains(x.IdDonThuoc.Value))
                 .ToListAsync();
 
-            var paidIds = await GetPaidMedicineDetailIds(chiTiet.Select(x => x.Id).ToList());
+            var detailIds = chiTiet.Select(x => x.Id).ToList();
+            var paidIds = await GetPaidMedicineDetailIds(detailIds);
+            var lockedIds = await GetLockedMedicineDetailIds(detailIds);
             var papers = await _db.GiayKetLuanKhams
                 .AsNoTracking()
                 .Where(x => visitIds.Contains(x.IdLanKham))
@@ -602,7 +607,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                         BacSi = BuildDoctorDto(don.IdBacSiNavigation),
                         TongTien = details.Sum(x => (x.IdThuocNavigation?.DonGia ?? 0m) * (x.SoLuong ?? 0)),
                         CoThuocDaThanhToan = details.Any(x => paidIds.Contains(x.Id)),
-                        ChiTiet = details.Select(x => BuildMedicineDetailDto(x, paidIds)).ToList()
+                        ChiTiet = details.Select(x => BuildMedicineDetailDto(x, paidIds, lockedIds)).ToList()
                     },
                     NhomThuoc = details
                         .GroupBy(x => GetMedicineCategory(x.IdThuocNavigation))
@@ -611,7 +616,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                             LoaiThuoc = g.Key,
                             SoDong = g.Count(),
                             TongTien = g.Sum(x => (x.IdThuocNavigation?.DonGia ?? 0m) * (x.SoLuong ?? 0)),
-                            ChiTiet = g.Select(x => BuildMedicineDetailDto(x, paidIds)).ToList()
+                            ChiTiet = g.Select(x => BuildMedicineDetailDto(x, paidIds, lockedIds)).ToList()
                         })
                         .ToList()
                 };
@@ -649,8 +654,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (permissionError != null)
                 return permissionError;
 
-            if (await IsMedicineDetailPaid(ct.Id))
-                return BadRequest(new { message = "Thuốc đã thanh toán, không thể xóa trực tiếp." });
+            if (await IsMedicineDetailFinanciallyLocked(ct.Id))
+                return Conflict(new { state = "MEDICINE_ALREADY_IN_INVOICE", message = "Dòng thuốc đã được đưa vào hóa đơn, không thể xóa trực tiếp." });
 
             var beforeAudit = new { ct.Id, ct.IdDonThuoc, ct.IdThuoc, ct.SoLuong, ct.GhiChu };
             var thuoc = await _db.Thuocs.FirstAsync(t => t.Id == ct.IdThuoc);
@@ -687,8 +692,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (permissionError != null)
                 return permissionError;
 
-            if (await IsMedicineDetailPaid(ct.Id))
-                return BadRequest(new { message = "Thuốc đã thanh toán, không thể cập nhật trực tiếp." });
+            if (await IsMedicineDetailFinanciallyLocked(ct.Id))
+                return Conflict(new { state = "MEDICINE_ALREADY_IN_INVOICE", message = "Dòng thuốc đã được đưa vào hóa đơn, không thể cập nhật trực tiếp." });
 
             var beforeAudit = new { ct.Id, ct.IdDonThuoc, ct.IdThuoc, ct.SoLuong, ct.Sang, ct.Trua, ct.Chieu, ct.Toi, ct.Khuya, ct.SoNgayUong, ct.GhiChu };
 
@@ -876,6 +881,25 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                    roles.Contains("BAC_SI_LIEN_KHOA");
         }
 
+        private async Task<List<long>> GetLockedMedicineDetailIds(List<long> detailIds)
+        {
+            if (detailIds.Count == 0) return new List<long>();
+            var canceledStatuses = new[] { "HUY", "DA_HUY", "CANCELED", "CANCELLED" };
+
+            return await _db.ChiTietHoaDons
+                .AsNoTracking()
+                .Include(x => x.IdHoaDonNavigation)
+                .Where(x =>
+                    x.LoaiThamChieu == "THUOC" &&
+                    x.IdThamChieu.HasValue &&
+                    detailIds.Contains(x.IdThamChieu.Value) &&
+                    x.IdHoaDonNavigation != null &&
+                    !canceledStatuses.Contains((x.IdHoaDonNavigation.TrangThai ?? string.Empty).ToUpper()))
+                .Select(x => x.IdThamChieu!.Value)
+                .Distinct()
+                .ToListAsync();
+        }
+
         private async Task<List<long>> GetPaidMedicineDetailIds(List<long> detailIds)
         {
             if (detailIds.Count == 0) return new List<long>();
@@ -895,9 +919,9 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 .ToListAsync();
         }
 
-        private async Task<bool> IsMedicineDetailPaid(long detailId)
+        private async Task<bool> IsMedicineDetailFinanciallyLocked(long detailId)
         {
-            var paidStatuses = new[] { "DA_THANH_TOAN", "THANH_TOAN", "PAID", "SUCCESS" };
+            var canceledStatuses = new[] { "HUY", "DA_HUY", "CANCELED", "CANCELLED" };
             return await _db.ChiTietHoaDons
                 .AsNoTracking()
                 .Include(x => x.IdHoaDonNavigation)
@@ -905,10 +929,10 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                     x.LoaiThamChieu == "THUOC" &&
                     x.IdThamChieu == detailId &&
                     x.IdHoaDonNavigation != null &&
-                    paidStatuses.Contains((x.IdHoaDonNavigation.TrangThai ?? string.Empty).ToUpper()));
+                    !canceledStatuses.Contains((x.IdHoaDonNavigation.TrangThai ?? string.Empty).ToUpper()));
         }
 
-        private async Task<bool> HasPaidMedicineItems(long donThuocId)
+        private async Task<bool> HasFinanciallyLockedMedicineItems(long donThuocId)
         {
             var detailIds = await _db.ChiTietDonThuocs
                 .AsNoTracking()
@@ -917,8 +941,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 .ToListAsync();
 
             if (detailIds.Count == 0) return false;
-            var paidIds = await GetPaidMedicineDetailIds(detailIds);
-            return paidIds.Count > 0;
+            var lockedIds = await GetLockedMedicineDetailIds(detailIds);
+            return lockedIds.Count > 0;
         }
 
         private async Task<GiayKetLuanKham?> GetLatestConclusionPaper(long idLanKham)
@@ -955,9 +979,13 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             };
         }
 
-        private static object BuildMedicineDetailDto(ChiTietDonThuoc x, IReadOnlyCollection<long> paidIds)
+        private static object BuildMedicineDetailDto(
+            ChiTietDonThuoc x,
+            IReadOnlyCollection<long> paidIds,
+            IReadOnlyCollection<long> lockedIds)
         {
             var paid = paidIds.Contains(x.Id);
+            var locked = lockedIds.Contains(x.Id);
             return new
             {
                 x.Id,
@@ -970,7 +998,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 DonGia = x.IdThuocNavigation?.DonGia,
                 SoLuongTon = x.IdThuocNavigation?.SoLuongTon,
                 DaThanhToan = paid,
-                CanEdit = !paid,
+                DaLapHoaDon = locked,
+                CanEdit = !locked,
                 x.SoLuong,
                 x.DonVi,
                 x.DungTich,

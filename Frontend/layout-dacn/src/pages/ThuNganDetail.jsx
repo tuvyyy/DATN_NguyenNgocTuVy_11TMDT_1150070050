@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
-import { getBillDetail } from "../api/ThuNganApi";
+import { cancelVnpayPending, getBillDetail, getVnpayPaymentUrl } from "../api/ThuNganApi";
 import { handleConfirmPayment, handlePrintReceipt } from "../controllers/ThuNganController";
 import MainLayout from "../layouts/MainLayout";
 
@@ -68,19 +67,47 @@ export default function ThuNganDetail() {
   }, [loadBill]);
 
   const isPaid = bill?.trangThai === "DA_THANH_TOAN";
-  const canPay = bill?.canThanhToan !== false && !isPaid;
+  const isPaymentPending = bill?.trangThai === "DANG_THANH_TOAN";
+  const canPay = bill?.canThanhToan !== false && !isPaid && !isPaymentPending;
   const details = useMemo(() => bill?.chiTiet || [], [bill]);
 
   const handleVnPay = async () => {
     try {
       setPaying(true);
-      const response = await axios.get("https://localhost:7007/api/Vnpay/CreatePaymentUrl", {
-        params: { maHd: bill.maHd, amount: bill.tongTien },
-      });
-      window.location.href = response.data.paymentUrl || response.data;
+      const response = await getVnpayPaymentUrl(bill.maHd);
+      if (!response?.paymentUrl) throw new Error("Không nhận được URL thanh toán.");
+      window.location.href = response.paymentUrl;
     } catch {
       setPaying(false);
       Swal.fire("Không thể tạo thanh toán VNPay", "Vui lòng thử lại hoặc chọn phương thức khác.", "error");
+    }
+  };
+
+  const handleCancelPending = async () => {
+    const confirmation = await Swal.fire({
+      title: "Hủy giao dịch VNPay đang chờ?",
+      text: "Chỉ hủy khi khách chưa hoàn tất thanh toán trên VNPay. Sau khi hủy có thể tạo lại giao dịch hoặc thu bằng phương thức khác.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Hủy giao dịch đang chờ",
+      cancelButtonText: "Giữ nguyên",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmation.isConfirmed) return;
+
+    try {
+      setPaying(true);
+      await cancelVnpayPending(bill.maHd);
+      await Swal.fire("Đã hủy giao dịch chờ", "Hóa đơn có thể được thanh toán lại.", "success");
+      await loadBill();
+    } catch (error) {
+      Swal.fire(
+        "Không thể hủy giao dịch",
+        error?.response?.data?.message || "Trạng thái hóa đơn đã thay đổi. Vui lòng tải lại và kiểm tra.",
+        "error"
+      );
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -161,7 +188,7 @@ export default function ThuNganDetail() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="truncate text-xl font-bold text-slate-900 tracking-tight">Chi tiết hóa đơn</h1>
-                <StatusBadge paid={isPaid} />
+                <StatusBadge paid={isPaid} pending={isPaymentPending} />
               </div>
               <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
                 Mã hệ thống: <span className="font-mono font-bold text-[#0077B6] bg-[#0077B6]/5 px-2 py-0.5 rounded border border-[#0077B6]/15">{bill.maHd}</span>
@@ -324,7 +351,7 @@ export default function ThuNganDetail() {
                       <button 
                         key={method.value} 
                         type="button" 
-                        disabled={isPaid} 
+                        disabled={isPaid || isPaymentPending}
                         onClick={() => setPaymentMethod(method.value)} 
                         className={`flex items-center justify-between w-full p-3 rounded-lg border text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
                           isSelected 
@@ -355,6 +382,22 @@ export default function ThuNganDetail() {
                   <div className="space-y-0.5">
                     <p className="text-emerald-900 font-bold">Giao dịch đã hoàn tất</p>
                     <p className="text-emerald-700 text-xs font-medium">Hóa đơn đã được thanh toán đầy đủ. Bạn có thể in lại phiếu thu bất cứ lúc nào.</p>
+                  </div>
+                </div>
+              ) : isPaymentPending ? (
+                <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 font-semibold shadow-sm">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-sky-600" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold">Giao dịch QR/VNPay đang chờ kết quả</p>
+                    <p className="text-xs font-medium">Không tạo thêm giao dịch hoặc đổi phương thức thanh toán cho đến khi nhận kết quả.</p>
+                    <button
+                      type="button"
+                      disabled={paying}
+                      onClick={handleCancelPending}
+                      className="mt-2 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Hủy giao dịch đang chờ
+                    </button>
                   </div>
                 </div>
               ) : bill.canThanhToan === false ? (
@@ -411,13 +454,20 @@ export default function ThuNganDetail() {
   );
 }
 
-function StatusBadge({ paid }) {
-  return paid ? (
+function StatusBadge({ paid, pending }) {
+  if (paid) return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
       Đã thanh toán
     </span>
-  ) : (
+  );
+  if (pending) return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-bold text-sky-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
+      Đang chờ VNPay
+    </span>
+  );
+  return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-bold text-amber-700">
       <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
       Chưa thanh toán

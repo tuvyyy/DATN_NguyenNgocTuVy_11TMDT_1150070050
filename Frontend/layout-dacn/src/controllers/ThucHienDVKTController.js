@@ -8,6 +8,17 @@ import {
 
 const errorMessage = (error, fallback) => error?.response?.data?.message || error?.response?.data || error?.message || fallback;
 
+const showActionError = (error, title, fallback = "Vui lòng thử lại.") => {
+  const isUnpaid = error?.response?.data?.code === "DVKT_CHUA_THANH_TOAN";
+  return Swal.fire({
+    title: isUnpaid ? "Bệnh nhân chưa đóng tiền" : title,
+    text: errorMessage(error, fallback),
+    icon: isUnpaid ? "warning" : "error",
+    confirmButtonText: isUnpaid ? "Đã hiểu" : "Đóng",
+    confirmButtonColor: isUnpaid ? "#d97706" : "#dc2626",
+  });
+};
+
 export const handleExportPDF = async (id) => {
   try {
     const blob = await exportPdfDVKT(id);
@@ -64,7 +75,7 @@ export const handleDuyet = async (id, refresh) => {
     await approveKetQua(id);
     await Swal.fire("Đã duyệt kết quả", "Kết quả đã được khóa để chuẩn bị gửi.", "success");
     await refresh?.();
-  } catch (error) { Swal.fire("Không thể duyệt kết quả", errorMessage(error, "Vui lòng thử lại."), "error"); }
+  } catch (error) { showActionError(error, "Không thể duyệt kết quả"); }
 };
 
 export const handleHuyDuyet = async (id, refresh) => {
@@ -80,7 +91,7 @@ export const handleGui = async (id, refresh) => {
     await sendKetQua(id);
     await Swal.fire("Đã gửi kết quả", "Kết quả đã được chuyển về phòng khám.", "success");
     await refresh?.();
-  } catch (error) { Swal.fire("Không thể gửi kết quả", errorMessage(error, "Vui lòng thử lại."), "error"); }
+  } catch (error) { showActionError(error, "Không thể gửi kết quả"); }
 };
 
 export const handleNhan = async (id, refresh) => {
@@ -88,7 +99,7 @@ export const handleNhan = async (id, refresh) => {
     await nhanDVKT(id);
     await Swal.fire("Đã nhận chỉ định", "Chỉ định đã chuyển sang danh sách đang thực hiện.", "success");
     await refresh?.();
-  } catch (error) { Swal.fire("Không thể nhận chỉ định", errorMessage(error, "Vui lòng thử lại."), "error"); }
+  } catch (error) { showActionError(error, "Không thể nhận chỉ định"); }
 };
 
 export const handleHuyNhan = async (id, refresh) => {
@@ -104,7 +115,7 @@ export const handleHoanThanh = async (id, refresh) => {
     await hoanThanhDVKT(id);
     await Swal.fire("Đã hoàn thành", "Chỉ định đã chuyển sang danh sách hoàn thành.", "success");
     await refresh?.();
-  } catch (error) { Swal.fire("Không thể hoàn thành", errorMessage(error, "Vui lòng thử lại."), "error"); }
+  } catch (error) { showActionError(error, "Không thể hoàn thành"); }
 };
 
 export const loadLogs = async (id, setLogs) => setLogs(await getLogsDVKT(id));

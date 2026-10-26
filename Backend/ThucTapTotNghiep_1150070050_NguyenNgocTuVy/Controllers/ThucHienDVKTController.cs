@@ -76,6 +76,28 @@ namespace DACN.Controllers
                 .AnyAsync(x => x.IdKetQua == kq.Id && x.GiaTri != null && x.GiaTri.Trim() != "");
         }
 
+        private async Task<bool> IsDvktPaidAsync(long idChiDinh)
+        {
+            return await (
+                from cd in _db.ChiDinhDvkts
+                join ct in _db.ChiTietHoaDons on (long)cd.IdDvkt equals ct.IdThamChieu
+                join hd in _db.HoaDons on ct.IdHoaDon equals hd.Id
+                where cd.Id == idChiDinh
+                      && hd.IdLanKham == cd.IdLanKham
+                      && hd.LoaiHoaDon == "DVKT"
+                      && ct.LoaiThamChieu == "DVKT"
+                      && hd.TrangThai == "DA_THANH_TOAN"
+                select hd.Id
+            ).AnyAsync();
+        }
+
+        private IActionResult PaymentRequiredForDvkt()
+            => StatusCode(StatusCodes.Status402PaymentRequired, new
+            {
+                code = "DVKT_CHUA_THANH_TOAN",
+                message = "Bệnh nhân chưa đóng tiền dịch vụ kỹ thuật. Vui lòng hoàn tất thanh toán trước khi thực hiện và trả kết quả."
+            });
+
         // ============================================================
         // HELPER: GHI LOG THAO TÁC
         // (Bạn nhớ add DbSet<DvktThucHienLog> vào DACNDbContext + migration)
@@ -277,24 +299,8 @@ namespace DACN.Controllers
         [HttpPatch("nhan/{id}")]
         public async Task<IActionResult> NhanDVKT(long id)
         {
-            // 🔥 CHECK THANH TOÁN TRƯỚC KHI NHẬN DVKT
-            var daThanhToan = await (
-                from cdkt in _db.ChiDinhDvkts
-                join hdct in _db.ChiTietHoaDons
-                    on cdkt.IdDvkt equals hdct.IdThamChieu
-                join hd in _db.HoaDons
-                    on hdct.IdHoaDon equals hd.Id
-                where cdkt.Id == id
-                      && hd.LoaiHoaDon == "DVKT"
-                      && hdct.LoaiThamChieu == "DVKT"
-                      && hd.TrangThai == "DA_THANH_TOAN"
-                select hd.Id
-            ).AnyAsync();
-
-            if (!daThanhToan)
-            {
-                return BadRequest("❌ Dịch vụ này chưa được thanh toán. Không thể nhận thực hiện DVKT.");
-            }
+            if (!await IsDvktPaidAsync(id))
+                return PaymentRequiredForDvkt();
 
             var ktvId = GetKtvId();
 
@@ -358,6 +364,9 @@ namespace DACN.Controllers
         public async Task<IActionResult> TaoHoacCapNhatKetQua([FromBody] CreateKetQuaDVKTDto dto)
         {
             var ktvId = GetKtvId();
+
+            if (!await IsDvktPaidAsync(dto.IdChiDinhDVKT))
+                return PaymentRequiredForDvkt();
 
             // Kiểm tra chỉ định DVKT
             var cd = await _db.ChiDinhDvkts.FindAsync(dto.IdChiDinhDVKT);
@@ -432,6 +441,9 @@ namespace DACN.Controllers
 
             if (kq == null)
                 return NotFound("Không tìm thấy kết quả DVKT.");
+
+            if (!await IsDvktPaidAsync(kq.IdChiDinhDvkt))
+                return PaymentRequiredForDvkt();
 
             var cd = kq.IdChiDinhDvktNavigation;
             if (cd == null)
@@ -610,6 +622,9 @@ namespace DACN.Controllers
         {
             var ktvId = GetKtvId();
 
+            if (!await IsDvktPaidAsync(id))
+                return PaymentRequiredForDvkt();
+
             var kq = await _db.DvktKetQuas
                 .Include(x => x.IdChiDinhDvktNavigation)
                 .FirstOrDefaultAsync(x => x.IdChiDinhDvkt == id);
@@ -683,6 +698,9 @@ namespace DACN.Controllers
         public async Task<IActionResult> SendKetQua(long id)
         {
             var ktvId = GetKtvId();
+
+            if (!await IsDvktPaidAsync(id))
+                return PaymentRequiredForDvkt();
 
             var kq = await _db.DvktKetQuas
                 .Include(x => x.IdChiDinhDvktNavigation)
@@ -788,6 +806,9 @@ namespace DACN.Controllers
         public async Task<IActionResult> HoanThanh(long id)
         {
             var ktvId = GetKtvId();
+
+            if (!await IsDvktPaidAsync(id))
+                return PaymentRequiredForDvkt();
 
             var cd = await _db.ChiDinhDvkts.FindAsync(id);
             if (cd == null) return NotFound("Không tìm thấy DVKT.");

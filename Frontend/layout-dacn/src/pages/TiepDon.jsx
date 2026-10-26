@@ -155,7 +155,7 @@ const TIMELINE_ACTION_LABELS = {
   AREA_TRANSFER_ACCEPTED: "Nhận chuyển khu",
   AREA_TRANSFER_CANCELLED: "Hủy yêu cầu chuyển khu",
   CROSS_AREA_RECEIVED: "Nhận chuyển khu liên viện",
-  SERVICE_ORDER_DRAFT_SAVED: "Lưu nháp chỉ định",
+  SERVICE_ORDER_DRAFT_SAVED: "Lưu chỉ định",
   SERVICE_ORDER_CONFIRMED: "Xác nhận chỉ định dịch vụ",
   QUEUE_TICKETS_CREATED: "Cấp số thứ tự khám",
   QUEUE_ROOM_CHANGED: "Đổi phòng khám/hàng đợi",
@@ -377,6 +377,10 @@ const parseFileName = (contentDisposition, fallback) => {
 };
 
 const normalizeStatus = (status) => normalize(status).toUpperCase();
+const isActiveEncounterStatus = (status) => {
+  const value = normalizeStatus(status);
+  return Boolean(value) && !["DA_HUY", "HUY", "HUY_TIEP_DON", "DA_KHAM", "DA_DONG", "DONG"].includes(value);
+};
 const generateIdempotencyKey = (prefix = "idem") =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -392,7 +396,9 @@ const validate = (form, vital) => {
     errors.so_dien_thoai = "Số điện thoại không đúng định dạng Việt Nam.";
   }
 
-  if (normalize(form.cccd) && !CCCD_REGEX.test(normalize(form.cccd))) {
+  if (!normalize(form.cccd)) {
+    errors.cccd = "CCCD là bắt buộc.";
+  } else if (!CCCD_REGEX.test(normalize(form.cccd))) {
     errors.cccd = "CCCD phải có 9 hoặc 12 chữ số.";
   }
   if (normalize(form.email)) {
@@ -593,6 +599,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
   const [vital, setVital] = useState(EMPTY_VITAL);
   const [errors, setErrors] = useState({});
   const [selectedEncounter, setSelectedEncounter] = useState(null);
+  const [lookupTodayRecord, setLookupTodayRecord] = useState(null);
 
   const [activeTab, setActiveTab] = useState(initialTab || "today");
   const [filterDate, setFilterDate] = useState(getTodayKey());
@@ -851,6 +858,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
 
       const hasSignal = payload.CCCD || payload.SoDienThoai || payload.MaBenhNhan;
       if (!hasSignal) {
+        setLookupTodayRecord(null);
         return;
       }
 
@@ -859,6 +867,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
       setLookupLoading(false);
 
       if (!res || res.status >= 400 || !res.data?.exists || !res.data?.patient) {
+        setLookupTodayRecord(null);
         return;
       }
 
@@ -892,13 +901,15 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
       }));
 
       if (todayRecord?.id) {
-        setSelectedEncounter({
+        setLookupTodayRecord({
           id: todayRecord.id,
           maHs: todayRecord.maHs || "",
           trangThai: todayRecord.trangThai || "",
+          ngayTao: todayRecord.ngayTao || null,
           khuTiepDon: todayRecord.khuTiepDon || null,
           quayTiepDon: todayRecord.quayTiepDon || null,
           isOtherArea: todayRecord.isOtherArea === true,
+          isActive: todayRecord.isActive === true || isActiveEncounterStatus(todayRecord.trangThai),
           canEditEncounter: true,
           canCancel: true,
           canSelectService: true,
@@ -911,6 +922,39 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
             text: `Bệnh nhân đang có hồ sơ trong ngày tại ${areaName}. Nếu nhận sang khu hiện tại, cần nhập lý do chuyển/nhận khu.`,
           });
         }
+        if (todayRecord.isActive || isActiveEncounterStatus(todayRecord.trangThai)) {
+          const areaName = todayRecord.khuTiepDon?.tenKhu || todayRecord.khuTiepDon?.maKhu || "chưa xác định khu";
+          const counterName = todayRecord.quayTiepDon?.tenQuay || todayRecord.quayTiepDon?.maQuay || "";
+          setNotice({ type: "", text: "" });
+          setWarningModal({
+            open: true,
+            title: todayRecord.isOtherArea
+              ? "Cảnh báo trùng hồ sơ ở khu khác"
+              : "Cảnh báo trùng hồ sơ trong ngày",
+            message: todayRecord.isOtherArea
+              ? `Bệnh nhân đã được tiếp đón bằng hồ sơ ${todayRecord.maHs || `#${todayRecord.id}`} vào ngày ${toDisplayDate(todayRecord.ngayTao)} lúc ${toDisplayTime(todayRecord.ngayTao)}, tại ${areaName}${counterName ? ` - ${counterName}` : ""}. Khu hiện tại không được tiếp đón. Vui lòng hủy tiếp đón tại khu cũ trước.`
+              : `Bệnh nhân đã được tiếp đón bằng hồ sơ ${todayRecord.maHs || `#${todayRecord.id}`} vào ngày ${toDisplayDate(todayRecord.ngayTao)} lúc ${toDisplayTime(todayRecord.ngayTao)}, tại ${areaName}${counterName ? ` - ${counterName}` : ""}. Hệ thống đã nạp hồ sơ hiện có và không cho tạo hồ sơ mới.`,
+          });
+        } else {
+          const status = normalizeStatus(todayRecord.trangThai);
+          const wasCancelled = ["DA_HUY", "HUY", "HUY_TIEP_DON"].includes(status);
+          setNotice({ type: "", text: "" });
+          setWarningModal({
+            open: true,
+            title: wasCancelled ? "Hồ sơ trong ngày đã được hủy" : "Bệnh nhân đã khám trong ngày",
+            message: wasCancelled
+              ? `Hồ sơ ${todayRecord.maHs || `#${todayRecord.id}`} đã tiếp đón ngày ${toDisplayDate(todayRecord.ngayTao)} lúc ${toDisplayTime(todayRecord.ngayTao)} nhưng đã hủy. Bạn được phép tạo lượt tiếp đón mới.`
+              : `Hồ sơ ${todayRecord.maHs || `#${todayRecord.id}`} đã hoàn tất ngày ${toDisplayDate(todayRecord.ngayTao)} lúc ${toDisplayTime(todayRecord.ngayTao)}. Muốn tiếp đón thêm lượt trong ngày, bắt buộc nhập “Lý do tạo thêm lượt trong ngày”.`,
+          });
+        }
+      } else {
+        setLookupTodayRecord(null);
+        setNotice({ type: "", text: "" });
+        setWarningModal({
+          open: true,
+          title: "Bệnh nhân đã tồn tại",
+          message: `CCCD/SĐT đã thuộc bệnh nhân ${p.maBn || `#${p.id}`} - ${normalizeVietnameseText(p.hoTen) || "không rõ họ tên"}. Hệ thống đã nạp thông tin bệnh nhân hiện có để tránh tạo trùng mã bệnh nhân.`,
+        });
       }
     }, 650);
 
@@ -959,6 +1003,9 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
     const { name, value } = e.target;
     if (selectedEncounter && ["ma_bn", "ho_ten", "cccd", "so_dien_thoai"].includes(name)) {
       setSelectedEncounter(null);
+    }
+    if (["ma_bn", "ho_ten", "cccd", "so_dien_thoai"].includes(name)) {
+      setLookupTodayRecord(null);
     }
     if (name === "id_khu_tiep_don") {
       const nextArea = receptionAreas.find((area) => String(area.id) === String(value)) || null;
@@ -1165,6 +1212,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
     setForm({ ...EMPTY_FORM, ...buildAreaFormPatch(currentArea, currentCounter) });
     setVital(EMPTY_VITAL);
     setSelectedEncounter(null);
+    setLookupTodayRecord(null);
     setWardSuggestions([]);
     setWardSuggestLoading(false);
     setWardSuggestError("");
@@ -1195,6 +1243,26 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
     }
     if (selectedEncounter && selectedEncounter.canEditEncounter === false) {
       setNotice({ type: "error", text: "Hồ sơ hiện tại đã khóa chỉnh sửa cho vai trò tiếp đón." });
+      return;
+    }
+
+    if (isSelectedEncounterOtherArea) {
+      setWarningModal({
+        open: true,
+        title: "Hồ sơ đang được tiếp đón ở khu khác",
+        message: `Trùng hồ sơ ${selectedEncounter.maHs || `#${selectedEncounter.id}`}, đã tiếp đón ngày ${toDisplayDate(selectedEncounter.ngayTao)} lúc ${toDisplayTime(selectedEncounter.ngayTao)} tại ${selectedEncounter.khuTiepDon?.tenKhu || selectedEncounter.khuTiepDon?.maKhu || "khu khác"}. Khu hiện tại không được tiếp đón; khu cũ phải hủy tiếp đón trước.`,
+      });
+      return;
+    }
+    if (lookupTodayRecord && (lookupTodayRecord.isActive || isActiveEncounterStatus(lookupTodayRecord.trangThai))) {
+      const areaName = lookupTodayRecord.khuTiepDon?.tenKhu || lookupTodayRecord.khuTiepDon?.maKhu || "chưa xác định khu";
+      setWarningModal({
+        open: true,
+        title: lookupTodayRecord.isOtherArea
+          ? "Không thể tiếp đón: hồ sơ đang ở khu khác"
+          : "Không thể tạo trùng hồ sơ trong ngày",
+        message: `Hồ sơ ${lookupTodayRecord.maHs || `#${lookupTodayRecord.id}`} đã tiếp đón ngày ${toDisplayDate(lookupTodayRecord.ngayTao)} lúc ${toDisplayTime(lookupTodayRecord.ngayTao)} tại ${areaName}. ${lookupTodayRecord.isOtherArea ? "Phải hủy tiếp đón tại khu cũ trước." : "Vui lòng mở hồ sơ hiện có từ Danh sách nếu cần xử lý tiếp."}`,
+      });
       return;
     }
 
@@ -1307,6 +1375,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
           id: conflictEncounter.id,
           maHs: conflictEncounter.maHs || "",
           trangThai: conflictEncounter.trangThai || "",
+          ngayTao: conflictEncounter.ngayTao || null,
           khuTiepDon: conflictEncounter.khuTiepDon || null,
           quayTiepDon: conflictEncounter.quayTiepDon || null,
           isOtherArea: state === "ACTIVE_ENCOUNTER_IN_OTHER_AREA",
@@ -1879,7 +1948,7 @@ export default function TiepDon({ viewMode = "full", initialTab = "today" }) {
                         onChange={handleChange}
                         error={errors.ma_lich_hen}
                       />
-                      <InputField label="CCCD" name="cccd" value={form.cccd} onChange={handleChange} error={errors.cccd} />
+                      <InputField required label="CCCD *" name="cccd" value={form.cccd} onChange={handleChange} error={errors.cccd} />
                     </div>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
                       <InputField required label="Họ tên *" name="ho_ten" value={form.ho_ten} onChange={handleChange} error={errors.ho_ten} />

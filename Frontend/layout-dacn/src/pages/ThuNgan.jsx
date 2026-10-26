@@ -197,6 +197,13 @@ function Stat({ label, value, tone, borderTone }) {
 }
 
 function InvoiceStatus({ item }) {
+  if (item.trangThai === "DANG_THANH_TOAN") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
+        Đang chờ QR/VNPay
+      </span>
+    );
+  }
   if (item.canThanhToan === false && item.trangThai !== "DA_THANH_TOAN") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-600" title={item.lyDoKhongThanhToan}>

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Dtos;
@@ -18,6 +19,10 @@ public class ServiceRegistrationV2Controller : ControllerBase
 {
     private const string FeatureCode = "TIEP_DON";
     private const string IdempotencyCachePrefix = "SERVICE_ORDER_CONFIRM";
+    private static readonly JsonSerializerOptions CompactJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private readonly DACNDbContext _db;
     private readonly PricingService _pricing;
@@ -569,6 +574,15 @@ public class ServiceRegistrationV2Controller : ControllerBase
             await tx.RollbackAsync();
             return BadRequest(new { message = "Phiếu dịch vụ đã thanh toán, không thể chỉnh sửa trực tiếp." });
         }
+        else if (string.Equals(order.TrangThai, "CHO_KHAM", StringComparison.OrdinalIgnoreCase))
+        {
+            await tx.RollbackAsync();
+            return BadRequest(new
+            {
+                state = "SERVICE_ORDER_ALREADY_QUEUED",
+                message = "Phiếu dịch vụ đã xác nhận và đưa vào hàng đợi khám. Không thể ghi đè; hãy hủy/đổi phòng đúng nghiệp vụ."
+            });
+        }
 
         if (order.ChiTietHoaDons.Count > 0)
         {
@@ -593,17 +607,21 @@ public class ServiceRegistrationV2Controller : ControllerBase
             var roomAreaName = service.IdPhongNavigation?.IdKhuTiepDonNavigation?.TenKhu;
             var detailDescription = JsonSerializer.Serialize(new
             {
-                encounterId = encounter.Id,
-                serviceId = service.Id,
                 serviceCode = service.Ma,
-                serviceName = service.Ten,
                 roomId = service.IdPhong,
                 roomName,
                 roomAreaId,
-                roomAreaCode,
-                roomAreaName,
-                encounterAreaId = encounter.IdKhuTiepDon
-            });
+                roomAreaCode
+            }, CompactJsonOptions);
+            if (detailDescription.Length > 255)
+            {
+                detailDescription = JsonSerializer.Serialize(new
+                {
+                    serviceCode = service.Ma,
+                    roomId = service.IdPhong,
+                    roomName = roomName.Length > 120 ? roomName[..120] : roomName
+                }, CompactJsonOptions);
+            }
 
             _db.ChiTietHoaDons.Add(new ChiTietHoaDon
             {

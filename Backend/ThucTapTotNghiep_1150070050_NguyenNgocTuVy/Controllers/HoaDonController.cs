@@ -3,7 +3,9 @@ using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Models;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Dtos;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Text.Json;
 
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
@@ -59,6 +61,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 .Include(h => h.IdBenhNhanNavigation)
                 .Where(h =>
     h.TrangThai == "CHUA_THANH_TOAN" ||
+    h.TrangThai == "CHO_THANH_TOAN" ||
+    h.TrangThai == "DANG_THANH_TOAN" ||
     h.TrangThai == "TAO" ||
     h.TrangThai == "DA_THANH_TOAN"
 );
@@ -140,30 +144,40 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
 
         // ✅ Xác nhận thanh toán bằng ID (long)
         [HttpPut("xac-nhan-thanh-toan/{id:long}")]
+        [Authorize]
         public async Task<IActionResult> ConfirmPayment(long id, [FromBody] long idThuNgan)
         {
+            var actorId = GetCurrentUserId();
+            if (!actorId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản thu ngân đang đăng nhập." });
+
             var hd = await _db.HoaDons.FirstOrDefaultAsync(x => x.Id == id);
             if (hd == null)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            return await ConfirmPaymentCoreAsync(hd, idThuNgan, null);
+            return await ConfirmPaymentCoreAsync(hd, actorId.Value, null);
         }
 
         // ✅ Xác nhận thanh toán bằng MÃ HÓA ĐƠN (chuỗi)
         [HttpPut("xac-nhan-thanh-toan/ma/{maHd}")]
+        [Authorize]
         public async Task<IActionResult> ConfirmPaymentByCode(string maHd, [FromBody] ConfirmPaymentRequest req)
         {
             if (string.IsNullOrWhiteSpace(maHd))
                 return BadRequest("Thiếu mã hóa đơn.");
 
-            if (req == null || req.IdThuNgan <= 0)
-                return BadRequest("Thiếu idThuNgan hợp lệ.");
+            if (req == null)
+                return BadRequest("Thiếu thông tin thanh toán.");
+
+            var actorId = GetCurrentUserId();
+            if (!actorId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản thu ngân đang đăng nhập." });
 
             var hd = await _db.HoaDons.FirstOrDefaultAsync(x => x.MaHd == maHd);
             if (hd == null)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            return await ConfirmPaymentCoreAsync(hd, req.IdThuNgan, req.HinhThucThanhToan);
+            return await ConfirmPaymentCoreAsync(hd, actorId.Value, req.HinhThucThanhToan);
         }
 
         private async Task<IActionResult> ConfirmPaymentCoreAsync(HoaDon hd, long idThuNgan, string? paymentMethod)
@@ -174,13 +188,58 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (string.Equals(hd.TrangThai, "DA_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
                 return BadRequest("Hóa đơn này đã được thanh toán rồi.");
 
+            if (string.Equals(hd.TrangThai, "DANG_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(new
+                {
+                    state = "PAYMENT_TRANSACTION_PENDING",
+                    message = "Hóa đơn đang có giao dịch QR/VNPay chờ kết quả. Không được xác nhận thêm bằng phương thức khác."
+                });
+            }
+
+            var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
+            var allowedManualPaymentMethods = new[] { "TIEN_MAT", "CHUYEN_KHOAN", "MOMO" };
+            if (!allowedManualPaymentMethods.Contains(normalizedPaymentMethod, StringComparer.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    state = "PAYMENT_METHOD_NOT_ALLOWED",
+                    message = "Phương thức thanh toán không hợp lệ. VNPay chỉ được xác nhận bằng callback của cổng thanh toán."
+                });
+            }
+
+            await _db.Entry(hd).Collection(x => x.ChiTietHoaDons).LoadAsync();
+            if (hd.ChiTietHoaDons.Count == 0)
+            {
+                return BadRequest(new
+                {
+                    state = "INVOICE_HAS_NO_LINES",
+                    message = "Hóa đơn chưa có dòng chi phí, không thể xác nhận thanh toán."
+                });
+            }
+
+            var calculatedTotal = hd.ChiTietHoaDons.Sum(x => x.ThanhTien ?? 0m)
+                - (hd.GiamGia ?? 0m)
+                + (hd.ThueVat ?? 0m);
+            var storedTotal = hd.TongTien ?? 0m;
+            if (decimal.Round(calculatedTotal, 2) != decimal.Round(storedTotal, 2))
+            {
+                return Conflict(new
+                {
+                    state = "INVOICE_TOTAL_MISMATCH",
+                    message = "Tổng hóa đơn không khớp tổng chi tiết. Vui lòng kiểm tra/lập lại hóa đơn trước khi thu tiền.",
+                    storedTotal,
+                    calculatedTotal
+                });
+            }
+
             var now = DateTime.Now;
             await using var tx = await _db.Database.BeginTransactionAsync();
 
             hd.TrangThai = "DA_THANH_TOAN";
             hd.IdThuNgan = idThuNgan;
             hd.NgayThanhToan = now;
-            hd.HinhThucTt = NormalizePaymentMethod(paymentMethod);
+            hd.HinhThucTt = normalizedPaymentMethod;
 
             var postProcess = await CompleteServiceOrderAfterPaymentAsync(hd, idThuNgan, now);
             if (!postProcess.Success)
@@ -709,7 +768,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             var items = await BuildHoaDonItemsAsync(hoaDon, area);
             var isServiceOrder = IsServiceOrder(hoaDon);
             var invalidItem = items.FirstOrDefault(x => !x.KhuHopLe);
-            var canPay = !isServiceOrder || (area.IdKhuTiepDon.HasValue && invalidItem == null);
+            var hasPendingTransaction = string.Equals(hoaDon.TrangThai, "DANG_THANH_TOAN", StringComparison.OrdinalIgnoreCase);
+            var canPay = !hasPendingTransaction && (!isServiceOrder || (area.IdKhuTiepDon.HasValue && invalidItem == null));
             var phongKham = string.Join(", ",
                 items.Select(x => x.TenPhong)
                     .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -735,6 +795,8 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 CanThanhToan = canPay,
                 LyDoKhongThanhToan = canPay
                     ? null
+                    : hasPendingTransaction
+                        ? "Giao dịch QR/VNPay đang chờ kết quả."
                     : !area.IdKhuTiepDon.HasValue
                         ? "Hồ sơ chưa có khu tiếp đón."
                         : RepairInvoiceText(invalidItem?.LyDoKhongHopLe),
@@ -927,6 +989,17 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         {
             var normalized = (paymentMethod ?? string.Empty).Trim().ToUpperInvariant();
             return string.IsNullOrWhiteSpace(normalized) ? "TIEN_MAT" : normalized;
+        }
+
+        private long? GetCurrentUserId()
+        {
+            var raw = User.FindFirstValue("sub")
+                ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("nameid")
+                ?? User.FindFirstValue("userId")
+                ?? User.FindFirstValue("id");
+
+            return long.TryParse(raw, out var id) && id > 0 ? id : null;
         }
 
         private static string? TryReadJsonString(string? raw, string propertyName)

@@ -253,6 +253,14 @@ namespace DACN.Controllers
             }
 
             var hoaDonCls = await GetLatestOpenDvktInvoice(dto.IdLanKham);
+            if (IsPendingElectronicPayment(hoaDonCls))
+            {
+                return Conflict(new
+                {
+                    state = "PAYMENT_TRANSACTION_PENDING",
+                    message = "Phiếu DVKT đang có giao dịch QR/VNPay chờ kết quả. Không được thêm chỉ định hoặc làm thay đổi số tiền trong lúc giao dịch đang xử lý."
+                });
+            }
 
             var cd = new ChiDinhDvkt
             {
@@ -470,6 +478,14 @@ namespace DACN.Controllers
                 return BadRequest("Chi dinh da duoc xu ly, khong the cap nhat.");
 
             var hoaDon = await GetOpenDvktInvoiceForOrder(cd.IdLanKham, cd.IdDvkt);
+            if (IsPendingElectronicPayment(hoaDon))
+            {
+                return Conflict(new
+                {
+                    state = "PAYMENT_TRANSACTION_PENDING",
+                    message = "Phiếu DVKT đang có giao dịch QR/VNPay chờ kết quả. Không được sửa số lượng hoặc nội dung chỉ định."
+                });
+            }
             if (hoaDon == null && await HasPaidDvktDetail(cd.IdLanKham, cd.IdDvkt))
                 return BadRequest("Chi dinh da nam trong hoa don da thanh toan, khong the cap nhat.");
 
@@ -520,6 +536,14 @@ namespace DACN.Controllers
             if (!check.ok) return check.error!;
 
             var hoaDon = await GetOpenDvktInvoiceForOrder(cd.IdLanKham, cd.IdDvkt);
+            if (IsPendingElectronicPayment(hoaDon))
+            {
+                return Conflict(new
+                {
+                    state = "PAYMENT_TRANSACTION_PENDING",
+                    message = "Phiếu DVKT đang có giao dịch QR/VNPay chờ kết quả. Không được hủy chỉ định trong lúc giao dịch đang xử lý."
+                });
+            }
             if (hoaDon == null && await HasPaidDvktDetail(cd.IdLanKham, cd.IdDvkt))
                 return BadRequest("Chi dinh da nam trong hoa don da thanh toan, khong the huy.");
 
@@ -769,6 +793,12 @@ namespace DACN.Controllers
             var status = (invoice?.TrangThai ?? string.Empty).Trim().ToUpperInvariant();
             return status is "DA_HUY" or "HUY" or "CANCELED" or "CANCELLED";
         }
+
+        private static bool IsPendingElectronicPayment(HoaDon? invoice)
+            => string.Equals(
+                invoice?.TrangThai?.Trim(),
+                "DANG_THANH_TOAN",
+                StringComparison.OrdinalIgnoreCase);
 
         private static bool IsOpenInvoice(HoaDon? invoice)
             => invoice != null && !IsPaidInvoice(invoice) && !IsCanceledInvoice(invoice);

@@ -574,16 +574,41 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 }
             }
 
+            if (isNoExamTreatment)
+            {
+                var hasPaidInvoice = await HasPaidInvoiceForVisit(id);
+                var hasPendingElectronicPayment = await HasPendingElectronicPaymentForVisit(id);
+                var hasLockedServices = await HasLockedClinicalServices(id);
+                if (hasPaidInvoice || hasPendingElectronicPayment || hasLockedServices)
+                {
+                    return Conflict(new
+                    {
+                        success = false,
+                        state = hasPendingElectronicPayment
+                            ? "PAYMENT_TRANSACTION_PENDING"
+                            : hasPaidInvoice
+                                ? "VISIT_HAS_PAID_INVOICE"
+                                : "CLINICAL_SERVICE_ALREADY_ACCEPTED",
+                        message = hasPendingElectronicPayment
+                            ? "Lượt khám đang có giao dịch QR/VNPay chờ kết quả, không thể kết luận Không khám."
+                            : hasPaidInvoice
+                                ? "Lượt khám đã có hóa đơn thanh toán, không thể kết luận Không khám trực tiếp."
+                                : "Đã có chỉ định được khoa thực hiện tiếp nhận hoặc có kết quả, không thể kết luận Không khám trực tiếp."
+                    });
+                }
+            }
+
             if (!isNoExamTreatment)
             {
+                var completedClsStatuses = new[]
+                {
+                    "done", "paid", "completed", "da_hoan_thanh", "da_thanh_toan",
+                    "canceled", "cancelled", "da_huy", "huy"
+                };
                 var blockingCls = await _db.ChiDinhDvkts
                     .Include(x => x.IdDvktNavigation)
                     .Where(x => x.IdLanKham == id)
-                    .Where(x =>
-                        x.TrangThai == "pending" ||
-                        x.TrangThai == "processing" ||
-                        x.TrangThai == "CHO_THUC_HIEN" ||
-                        x.TrangThai == "DANG_THUC_HIEN")
+                    .Where(x => x.TrangThai == null || !completedClsStatuses.Contains(x.TrangThai.ToLower()))
                     .Select(x => new
                     {
                         x.Id,
@@ -2261,6 +2286,16 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         [Authorize]
         public async Task<IActionResult> Cancel(long id, [FromBody] string? reason)
         {
+            reason = reason?.Trim();
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Hủy lượt khám bắt buộc nhập lý do cụ thể (ít nhất 5 ký tự)."
+                });
+            }
+
             var kham = await _db.LanKhams
                 .Include(x => x.IdHoSoNavigation)
                 .FirstOrDefaultAsync(x => x.Id == id);
@@ -2276,8 +2311,28 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (permissionError != null)
                 return permissionError;
 
+            if (string.Equals(kham.TrangThai, TrangThai.DangKham, StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(new
+                {
+                    success = false,
+                    state = "EXAM_ALREADY_STARTED",
+                    message = "Lượt khám đã bắt đầu. Không được hủy thẳng; bác sĩ phải kết luận Không khám và ghi rõ lý do."
+                });
+            }
+
             if (await HasPaidInvoiceForVisit(id))
                 return BadRequest(new { success = false, message = "Luot kham da co hoa don thanh toan, khong the huy." });
+
+            if (await HasPendingElectronicPaymentForVisit(id))
+            {
+                return Conflict(new
+                {
+                    success = false,
+                    state = "PAYMENT_TRANSACTION_PENDING",
+                    message = "Lượt khám đang có giao dịch QR/VNPay chờ kết quả, không thể hủy."
+                });
+            }
 
             if (await HasLockedClinicalServices(id))
                 return BadRequest(new { success = false, message = "Da co dich vu/ket qua CLS dang thuc hien hoac da hoan tat, khong the huy thang." });
@@ -3069,6 +3124,14 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                  h.TrangThai.ToUpper() == "THANH_TOAN"));
         }
 
+        private async Task<bool> HasPendingElectronicPaymentForVisit(long idLanKham)
+        {
+            return await _db.HoaDons.AnyAsync(h =>
+                h.IdLanKham == idLanKham &&
+                h.TrangThai != null &&
+                h.TrangThai.ToUpper() == "DANG_THANH_TOAN");
+        }
+
         private async Task<bool> HasLockedClinicalServices(long idLanKham)
         {
             var lockedDvkt = await _db.ChiDinhDvkts.AnyAsync(x =>
@@ -3107,6 +3170,23 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
 
             foreach (var service in pendingServices)
                 service.TrangThaiThucHien = TrangThai.Huy;
+
+            var openDvktInvoices = await _db.HoaDons
+                .Where(x => x.IdLanKham == idLanKham
+                    && x.LoaiHoaDon == "DVKT"
+                    && x.TrangThai != "DA_THANH_TOAN"
+                    && x.TrangThai != "DANG_THANH_TOAN"
+                    && x.TrangThai != "HUY"
+                    && x.TrangThai != "DA_HUY")
+                .ToListAsync();
+
+            foreach (var invoice in openDvktInvoices)
+            {
+                invoice.TrangThai = "HUY";
+                invoice.GhiChu = string.IsNullOrWhiteSpace(invoice.GhiChu)
+                    ? "Hủy do bác sĩ kết luận Không khám."
+                    : $"{invoice.GhiChu} | Hủy do bác sĩ kết luận Không khám.";
+            }
         }
 
         private static string? ReadMetaString(string? raw, string propertyName)
