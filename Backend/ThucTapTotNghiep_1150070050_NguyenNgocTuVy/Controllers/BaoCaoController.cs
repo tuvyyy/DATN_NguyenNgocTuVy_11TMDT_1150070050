@@ -10,7 +10,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/bao-cao")]
-public class BaoCaoController : ControllerBase
+public partial class BaoCaoController : ControllerBase
 {
     private readonly DACNDbContext _db;
 
@@ -20,7 +20,8 @@ public class BaoCaoController : ControllerBase
         new("cashier", "Báo cáo thu ngân", "THU_NGAN"),
         new("doctor", "Báo cáo bác sĩ", "BAC_SI"),
         new("lab", "Báo cáo cận lâm sàng", "KY_THUAT_VIEN"),
-        new("admin-summary", "Báo cáo tổng hợp quản trị", "ADMIN")
+        new("admin-summary", "Báo cáo tổng hợp quản trị", "ADMIN"),
+        new("visit-analytics", "Phân tích và dự báo lượt khám", "ADMIN")
     };
 
     public BaoCaoController(DACNDbContext db)

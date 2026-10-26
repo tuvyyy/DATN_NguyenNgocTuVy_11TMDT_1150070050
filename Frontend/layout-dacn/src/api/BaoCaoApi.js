@@ -93,3 +93,15 @@ export const exportReportCsv = async ({ type, fromDate, toDate }) => {
   }
   return response;
 };
+
+export const getVisitAnalytics = async (params) => {
+  const response = await requestWithFallback("/api/bao-cao/visits", { params });
+  if (response.status >= 400) throw new Error(response.data?.message || "Không tải được phân tích lượt khám.");
+  return response.data;
+};
+
+export const exportVisitAnalytics = async (params) => {
+  const response = await requestWithFallback("/api/bao-cao/visits/export", { params, responseType: "blob" });
+  if (response.status >= 400) throw new Error("Không xuất được kết quả phân tích lượt khám.");
+  return response;
+};

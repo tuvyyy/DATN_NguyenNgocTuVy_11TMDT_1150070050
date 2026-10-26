@@ -16,6 +16,7 @@ import {
 import MainLayout from "../layouts/MainLayout";
 import { exportReportCsv, getReportOptions, getReportSummary } from "../api/BaoCaoApi";
 import { usePermission } from "../hooks/UsePermission";
+import VisitAnalytics from "./reports/VisitAnalytics";
 
 const REPORT_LABELS = {
   reception: "Báo cáo lượt tiếp đón",
@@ -23,6 +24,7 @@ const REPORT_LABELS = {
   doctor: "Báo cáo hoạt động bác sĩ",
   lab: "Báo cáo thực hiện cận lâm sàng",
   "admin-summary": "Báo cáo tổng hợp quản trị",
+  "visit-analytics": "Phân tích và dự báo lượt khám",
 };
 
 const SUMMARY_LABELS = {
@@ -235,7 +237,7 @@ export default function BaoCao() {
   }, [summary]);
 
   const loadSummary = async () => {
-    if (!type) return;
+    if (!type || type === "visit-analytics") return;
     setSummaryLoading(true);
     setError("");
     try {
@@ -342,7 +344,7 @@ export default function BaoCao() {
               </select>
             </label>
 
-            <label className="block">
+            {type !== "visit-analytics" && <label className="block">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Từ ngày</span>
               <input
                 type="date"
@@ -350,9 +352,9 @@ export default function BaoCao() {
                 onChange={(event) => setFromDate(event.target.value)}
                 className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition-all duration-200 focus:border-[#0077B6] focus:ring-2 focus:ring-[#0077B6]/10 hover:border-slate-350 shadow-sm"
               />
-            </label>
+            </label>}
 
-            <label className="block">
+            {type !== "visit-analytics" && <label className="block">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Đến ngày</span>
               <input
                 type="date"
@@ -360,10 +362,10 @@ export default function BaoCao() {
                 onChange={(event) => setToDate(event.target.value)}
                 className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition-all duration-200 focus:border-[#0077B6] focus:ring-2 focus:ring-[#0077B6]/10 hover:border-slate-350 shadow-sm"
               />
-            </label>
+            </label>}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-3">
+          {type !== "visit-analytics" && <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 pt-3">
             <button
               type="button"
               onClick={loadSummary}
@@ -390,7 +392,7 @@ export default function BaoCao() {
               )}
               Xuất file CSV
             </button>
-          </div>
+          </div>}
         </header>
 
         {/* Scrollable Content Section */}
@@ -402,7 +404,7 @@ export default function BaoCao() {
             </div>
           )}
 
-          {!reports.length ? (
+          {type === "visit-analytics" ? <VisitAnalytics canExport={permission.canExport} /> : !reports.length ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
               <FileSpreadsheet size={40} className="mx-auto text-slate-350 mb-3" />
               <p className="text-sm font-bold text-slate-700">Không tìm thấy báo cáo</p>

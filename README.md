@@ -19,6 +19,7 @@
 | Thu ngân | Quản lý hóa đơn, xác nhận thanh toán và tích hợp thanh toán VNPay. |
 | Quản trị | Quản lý người dùng, vai trò, phân quyền, danh mục thuốc, dịch vụ và dịch vụ kỹ thuật. |
 | Vận hành và báo cáo | Báo cáo, thống kê; thông báo, yêu cầu hỗ trợ và nhật ký thao tác. |
+| Phân tích và dự báo | Thống kê lượt khám theo ngày/tháng, giờ, bác sĩ, chuyên khoa và nhóm mã ICD; hồi quy tuyến tính; dự báo Holt-Winters với MAE, RMSE, MAPE và mốc so sánh. |
 
 Luồng nghiệp vụ tổng quát:
 
@@ -179,6 +180,7 @@ Kết quả build frontend nằm trong thư mục `Frontend/layout-dacn/build/`.
 
 ## Tài liệu và demo
 
+- [Hướng dẫn thống kê, hồi quy và dự báo Holt-Winters](Docs/ThongKeDuBaoLuotKham.md).
 - [Hướng dẫn sử dụng hệ thống](Docs/HuongDanSuDung.md).
 - [Kịch bản demo tiếp đón](Docs/KichBanDemoTiepDon.md).
 - [Danh sách kiểm tra nghiệm thu tiếp đón](Docs/reception_acceptance_checklist.md).
@@ -186,6 +188,8 @@ Kết quả build frontend nằm trong thư mục `Frontend/layout-dacn/build/`.
 - [Script tạo tình huống demo tiếp đón](Backend/ThucTapTotNghiep_1150070050_NguyenNgocTuVy/Scripts/SeedReceptionPresentationCases.sql).
 
 Script demo tiếp đón sử dụng dữ liệu có tiền tố `DEMO-TD` và ngày hiện tại của SQL Server. Trước khi chạy, cần có tài khoản người dùng, Khu A/Khu B và các quầy tương ứng như mô tả trong script.
+
+Để dùng phần phân tích mới: đăng nhập quản trị, vào **Báo cáo → Phân tích và dự báo lượt khám**. Mặc định đọc dữ liệu phòng khám; Holt-Winters cần ít nhất 24 tháng huấn luyện cộng số tháng kiểm tra đã chọn (mặc định tổng 30 tháng đầy đủ). Khi chưa đủ lịch sử, hệ thống thông báo rõ. Có thể chọn nguồn **Dữ liệu mô phỏng để minh họa thuật toán** để thử toàn bộ luồng; dữ liệu này được ghi nhãn riêng và không ghi vào database.
 
 ## Xử lý lỗi thường gặp
 
