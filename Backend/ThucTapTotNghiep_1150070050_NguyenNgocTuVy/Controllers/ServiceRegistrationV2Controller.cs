@@ -742,6 +742,7 @@ public class ServiceRegistrationV2Controller : ControllerBase
                     await _db.SaveChangesAsync();
                 }
 
+                queueLanKham.IdSinhHieu ??= baseLanKham.IdSinhHieu;
                 var duplicateLine = await _db.LanKhamDichVus.AnyAsync(x =>
                     x.IdLanKham == queueLanKham.Id &&
                     x.IdDichVu == line.ServiceId &&

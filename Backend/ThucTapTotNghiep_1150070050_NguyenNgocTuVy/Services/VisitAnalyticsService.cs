@@ -18,7 +18,7 @@ public class VisitAnalyticsService(DACNDbContext db)
                     ? x.IdPhongNavigation.KhoaPhong : x.IdBacSiNavigation == null ? null : x.IdBacSiNavigation.KhoaPhong,
                 x.IdBenhNavigation == null ? null : x.IdBenhNavigation.Ma,
                 (x.IdBenhNhanNavigation != null && (x.IdBenhNhanNavigation.MaBn.StartsWith("DEMO-") || x.IdBenhNhanNavigation.MaBn.StartsWith("DM")))
-                    || (x.IdHoSoNavigation != null && (x.IdHoSoNavigation.MaHs.StartsWith("HS-DEMO-") || x.IdHoSoNavigation.MaHs.StartsWith("HS-DM"))), x.IdBacSi))
+                    || (x.IdHoSoNavigation != null && (x.IdHoSoNavigation.MaHs.StartsWith("HS-DEMO-") || x.IdHoSoNavigation.MaHs.StartsWith("HS-DM"))), x.IdBacSi, x.IdPhong == null && x.IdBacSi == null))
             .ToListAsync(ct);
         var undated = await db.LanKhams.CountAsync(x => x.ThoiGianBatDau == null && x.CreatedAt == null, ct);
         return VisitAnalyticsBuilder.Build(rows, from, to, DateTime.UtcNow.AddHours(7).Date, horizon, testMonths)

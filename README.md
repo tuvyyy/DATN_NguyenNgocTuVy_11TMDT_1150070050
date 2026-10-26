@@ -182,6 +182,7 @@ Kết quả build frontend nằm trong thư mục `Frontend/layout-dacn/build/`.
 
 ## Tài liệu và demo
 
+- [Kết quả kiểm thử, biểu đồ và nội dung Chương 3](Docs/ThucNghiem/README.md).
 - [Hướng dẫn thống kê, hồi quy và dự báo Holt-Winters](Docs/ThongKeDuBaoLuotKham.md).
 - [SQL và hướng dẫn tạo/khôi phục database](Docs/Database/README.md).
 - [Hướng dẫn sử dụng hệ thống](Docs/HuongDanSuDung.md).

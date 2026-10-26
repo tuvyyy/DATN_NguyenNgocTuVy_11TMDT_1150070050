@@ -1,0 +1,62 @@
+{
+  "dataKind": "database",
+  "generatedAt": "2026-10-26T15:28:40.1580571+07:00",
+  "from": "2022-01-01",
+  "to": "2026-10-26",
+  "rawCount": 896,
+  "validCount": 49,
+  "excludedCancelled": 104,
+  "excludedInvalid": 743,
+  "excludedReceptionOnly": 743,
+  "undatedCount": 0,
+  "demoCount": 0,
+  "monthly": [
+    {
+      "month": "2025-11",
+      "count": 35
+    },
+    {
+      "month": "2025-12",
+      "count": 3
+    },
+    {
+      "month": "2026-01",
+      "count": 0
+    },
+    {
+      "month": "2026-02",
+      "count": 0
+    },
+    {
+      "month": "2026-03",
+      "count": 0
+    },
+    {
+      "month": "2026-04",
+      "count": 4
+    },
+    {
+      "month": "2026-05",
+      "count": 4
+    },
+    {
+      "month": "2026-06",
+      "count": 3
+    },
+    {
+      "month": "2026-07",
+      "count": 0
+    },
+    {
+      "month": "2026-08",
+      "count": 0
+    },
+    {
+      "month": "2026-09",
+      "count": 0
+    }
+  ],
+  "forecastAvailable": false,
+  "forecastMessage": "Ch\u01B0a \u0111\u1EE7 d\u1EEF li\u1EC7u: c\u00F3 11 th\u00E1ng \u0111\u1EA7y \u0111\u1EE7; c\u1EA7n \u00EDt nh\u1EA5t 30 th\u00E1ng (24 th\u00E1ng hu\u1EA5n luy\u1EC7n v\u00E0 6 th\u00E1ng ki\u1EC3m tra). Kh\u00F4ng t\u1EA1o d\u1EF1 b\u00E1o khi thi\u1EBFu l\u1ECBch s\u1EED.",
+  "note": "S\u1ED1 li\u1EC7u t\u1ED5ng h\u1EE3p t\u1EEB database ph\u00E1t tri\u1EC3n, c\u00F3 d\u1EEF li\u1EC7u demo; kh\u00F4ng kh\u1EB3ng \u0111\u1ECBnh \u0111\u00E2y l\u00E0 l\u1ECBch s\u1EED v\u1EADn h\u00E0nh th\u1EF1c t\u1EBF."
+}

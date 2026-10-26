@@ -70,6 +70,7 @@ public partial class BaoCaoController
         Row("metadata", "", "validCount", report.ValidCount, null, null);
         Row("metadata", "", "excludedCancelled", report.ExcludedCancelled, null, null);
         Row("metadata", "", "excludedInvalid", report.ExcludedInvalid, null, null);
+        Row("metadata", "", "excludedReceptionOnly", report.ExcludedReceptionOnly, null, null);
         Row("metadata", "", "demoCount", report.DemoCount, null, null);
         Row("metadata", "", "undatedCount_all_database", report.UndatedCount, null, null);
         Row("metadata", "", "seasonLength", report.Forecast.SeasonLength, null, null);

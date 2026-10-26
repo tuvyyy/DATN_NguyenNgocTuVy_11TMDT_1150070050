@@ -27,10 +27,6 @@ export const http = axios.create({
 // Gắn Authorization nếu có
 http.interceptors.request.use((config) => {
   const token = getToken();
-  console.log("---- FE REQUEST ----");
-  console.log("URL =", config.url);
-  console.log("METHOD =", config.method);
-console.log("INTERCEPTOR TOKEN = ", token);
 
   if (token) config.headers.Authorization = `Bearer ${token}`;
 

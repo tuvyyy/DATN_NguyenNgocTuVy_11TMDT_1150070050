@@ -1,7 +1,7 @@
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Services;
 
 public record VisitObservation(long Id, long? PatientId, DateTime? At, string? Status, string? RecordStatus,
-    string? Doctor, string? Specialty, string? DiseaseCode, bool IsDemo, long? DoctorId = null);
+    string? Doctor, string? Specialty, string? DiseaseCode, bool IsDemo, long? DoctorId = null, bool IsRegistrationPlaceholder = false);
 public record VisitCount(string Label, int Count);
 public record DailyVisit(string Date, int Count);
 public record VisitAnalyticsReport
@@ -16,6 +16,7 @@ public record VisitAnalyticsReport
     public int ValidCount { get; init; }
     public int ExcludedCancelled { get; init; }
     public int ExcludedInvalid { get; init; }
+    public int ExcludedReceptionOnly { get; init; }
     public int DemoCount { get; init; }
     public List<string> Notes { get; init; } = new();
     public List<DailyVisit> Daily { get; init; } = new();
@@ -42,7 +43,7 @@ public static class VisitAnalyticsBuilder
         var rows = observations.GroupBy(x => x.Id).Select(g => g.First()).ToList();
         var cancelled = rows.Where(x => Cancelled.Contains(x.Status?.Trim() ?? "") || Cancelled.Contains(x.RecordStatus?.Trim() ?? "")).ToList();
         var nonCancelled = rows.Except(cancelled).ToList();
-        bool IsValid(VisitObservation x) => x.Id > 0 && x.PatientId > 0 && x.At.HasValue
+        bool IsValid(VisitObservation x) => !x.IsRegistrationPlaceholder && x.Id > 0 && x.PatientId > 0 && x.At.HasValue
             && x.At.Value.Date >= from && x.At.Value.Date <= to
             && !string.IsNullOrWhiteSpace(x.Status) && !Draft.Contains(x.Status.Trim());
         var valid = nonCancelled.Where(IsValid).ToList();
@@ -72,6 +73,7 @@ public static class VisitAnalyticsBuilder
         var notes = new List<string>
         {
             "Mỗi id lượt khám được tính một lần; loại lượt/hồ sơ hủy, bản nháp, thiếu bệnh nhân, thời điểm hoặc trạng thái.",
+            "Loại lượt nền của tiếp đón chưa có cả phòng khám lẫn bác sĩ; chỉ tính lượt đã được phân phòng hoặc bác sĩ, tránh đếm thêm lượt nền khi thu ngân tạo hàng đợi khám.",
             "Ngày thống kê dùng thời gian bắt đầu khám; nếu chưa có, dùng thời điểm tạo lượt. Các lượt đang chờ hợp lệ vẫn được tính; bản ghi không có cả hai thời điểm không thể gán vào khoảng lọc.",
             "Hồi quy và dự báo chỉ dùng tháng đầy đủ; không dùng tháng hiện tại hoặc tháng bị cắt bởi bộ lọc.",
             "Chuỗi bắt đầu từ tháng có lượt hợp lệ đầu tiên trong khoảng chọn; tháng trống sau đó được tính 0, cần xác nhận độ đầy đủ của dữ liệu nguồn.",
@@ -86,6 +88,7 @@ public static class VisitAnalyticsBuilder
             From = from.ToString("yyyy-MM-dd"), To = to.ToString("yyyy-MM-dd"), GeneratedAt = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)),
             RawCount = rows.Count, ValidCount = valid.Count, ExcludedCancelled = cancelled.Count,
             ExcludedInvalid = nonCancelled.Count - valid.Count, DemoCount = demoCount, Notes = notes,
+            ExcludedReceptionOnly = nonCancelled.Count(x => x.IsRegistrationPlaceholder),
             Daily = daily, Monthly = monthly,
             Hourly = Enumerable.Range(0, 24).Select(h => new VisitCount($"{h:00}:00–{h:00}:59", valid.Count(x => x.At!.Value.Hour == h))).ToList(),
             Doctors = Group(x => x.DoctorId.HasValue ? $"{x.Doctor ?? "Chưa xác định"} (#{x.DoctorId})" : x.Doctor), Specialties = Group(x => x.Specialty),

@@ -16,6 +16,8 @@ using System.Text.Json;
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
 {
     [ApiController]
+    [Authorize]
+    [RequireFeature("KHAM_BENH")]
     [Route("api/[controller]")]
     public class LanKhamController : ControllerBase
     {
@@ -61,11 +63,14 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (lk == null)
                 return NotFound(new { success = false, message = "Khong tim thay luot kham." });
 
+            var accessError = await EnsureCanTouchVisit(lk);
+            if (accessError != null) return accessError;
+
             var hs = lk.IdHoSoNavigation;
             var bn = lk.IdBenhNhanNavigation;
 
             var sh = await _db.SinhHieus
-                .Where(x => x.IdLanKham == id)
+                .Where(x => x.IdLanKham == id || x.Id == lk.IdSinhHieu)
                 .OrderByDescending(x => x.ThoiGianDo)
                 .FirstOrDefaultAsync();
 
@@ -602,7 +607,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             {
                 var completedClsStatuses = new[]
                 {
-                    "done", "paid", "completed", "da_hoan_thanh", "da_thanh_toan",
+                    "done", "paid", "completed", "sent", "da_hoan_thanh", "da_thanh_toan",
                     "canceled", "cancelled", "da_huy", "huy"
                 };
                 var blockingCls = await _db.ChiDinhDvkts

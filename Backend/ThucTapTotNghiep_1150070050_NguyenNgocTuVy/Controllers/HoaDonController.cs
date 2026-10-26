@@ -11,6 +11,8 @@ using System.Text.Json;
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
 {
     [ApiController]
+    [Authorize]
+    [RequireFeature("THANH_TOAN")]
     [Route("api/[controller]")]
     public class HoaDonController : ControllerBase
     {
@@ -371,6 +373,10 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             }
 
             var createdTickets = 0;
+            var intakeVitalId = await _db.LanKhams
+                .Where(x => x.IdHoSo == encounter.Id && x.IdSinhHieu.HasValue)
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => x.IdSinhHieu).FirstOrDefaultAsync();
             foreach (var line in lines)
             {
                 var queueVisit = await _db.LanKhams
@@ -394,6 +400,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                         IdBenhNhan = encounter.IdBenhNhan,
                         IdPhong = line.RoomId,
                         IdBacSi = assignedDoctor,
+                        IdSinhHieu = intakeVitalId,
                         TrangThai = "CHO_KHAM",
                         CreatedAt = now,
                         UpdatedAt = now,
@@ -412,6 +419,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                     queueVisit.UpdatedAt = now;
                 }
 
+                queueVisit.IdSinhHieu ??= intakeVitalId;
                 var duplicateLine = await _db.LanKhamDichVus.AnyAsync(x =>
                     x.IdLanKham == queueVisit.Id &&
                     x.IdDichVu == line.ServiceId &&

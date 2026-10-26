@@ -17,8 +17,6 @@ import {
   User,
   Mail,
   Phone,
-  Users,
-  ChevronDown,
   UserPlus,
   ClipboardCheck,
 } from "lucide-react";
@@ -303,7 +301,7 @@ const REG_TEXT = {
   loginNow: "Đăng nhập ngay",
   required: "*",
   successTitle: "Đăng ký thành công",
-  successMessage: "Tài khoản đã được tạo! Đang chuyển hướng đến trang đăng nhập...",
+  successMessage: "Tài khoản đã được tạo. Liên hệ quản trị viên để được cấp vai trò sử dụng.",
   failedTitle: "Đăng ký không thành công",
   emptyFields: "Vui lòng nhập đầy đủ thông tin.",
   passwordMismatch: "Mật khẩu xác nhận không khớp.",
@@ -333,63 +331,16 @@ function RegisterForm({ onSwitch }) {
   const [soDienThoai, setSoDienThoai] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [roleOpen, setRoleOpen] = useState(false);
-  const [roles, setRoles] = useState([]);
-  const [roleLoading, setRoleLoading] = useState(false);
-  const [roleError, setRoleError] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState({ type: "", title: "", message: "" });
   const logoSrc = `${process.env.PUBLIC_URL}/logo-clinic.svg`;
 
-  useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        setRoleLoading(true);
-        setRoleError("");
-        const res = await requestAuthApi("get", "/api/Auth/roles", undefined, false);
-        const raw = Array.isArray(res.data)
-          ? res.data
-          : Array.isArray(res.data?.data)
-          ? res.data.data
-          : [];
-
-        const normalized = raw
-          .map((r) => ({
-            id: r.id ?? r.Id,
-            ten: r.ten ?? r.Ten ?? "",
-            moTa: r.moTa ?? r.MoTa ?? "",
-          }))
-          .filter((r) => r.id !== undefined && r.id !== null);
-
-        setRoles(normalized);
-        if (!normalized.length) {
-          setRoleError("Không tải được danh sách vai trò.");
-        }
-      } catch (err) {
-        console.error("⚠️ Lỗi tải danh sách vai trò:", err);
-        setRoles([]);
-        const status = err?.response?.status;
-        const beMsg =
-          err?.response?.data?.message ||
-          (typeof err?.response?.data === "string" ? err.response.data : "");
-        if (status) {
-          setRoleError(`API vai trò lỗi (${status})${beMsg ? `: ${beMsg}` : ""}`);
-        } else {
-          setRoleError("Không kết nối được API vai trò (5006/7007).");
-        }
-      } finally {
-        setRoleLoading(false);
-      }
-    };
-    fetchRoles();
-  }, []);
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setNotice({ type: "", title: "", message: "" });
 
-    if (!tenDangNhap || !matKhau || !xacNhan || !selectedRole) {
+    if (!tenDangNhap || !matKhau || !xacNhan) {
       setNotice({ type: "error", title: REG_TEXT.failedTitle, message: REG_TEXT.emptyFields });
       return;
     }
@@ -404,7 +355,7 @@ function RegisterForm({ onSwitch }) {
       matKhau,
       email,
       soDienThoai,
-      vaiTroIds: [Number(selectedRole.id)],
+      vaiTroIds: [],
     };
 
     try {
@@ -420,7 +371,6 @@ function RegisterForm({ onSwitch }) {
       setXacNhan("");
       setEmail("");
       setSoDienThoai("");
-      setSelectedRole(null);
 
       setTimeout(() => {
         onSwitch();
@@ -570,62 +520,7 @@ function RegisterForm({ onSwitch }) {
             </div>
           </div>
 
-          <div className="relative mt-0">
-            <label className="mb-1.5 block text-sm font-semibold text-[#163a5f]">
-              {REG_TEXT.role} <span className="text-rose-500">{REG_TEXT.required}</span>
-            </label>
-            <div
-              className="relative"
-              onClick={() => setRoleOpen(!roleOpen)}
-              onBlur={() => setRoleOpen(false)}
-              tabIndex={0}
-            >
-              <div className="auth-input-group cursor-pointer">
-                <Users size={17} className="shrink-0 text-[#7b94ab]" />
-                <span className={`flex-1 text-[14px] ${!selectedRole ? "text-[#9aa9ba]" : "text-[#163a5f]"}`}>
-                  {selectedRole ? (selectedRole.moTa || selectedRole.ten) : REG_TEXT.rolePlaceholder}
-                </span>
-                <ChevronDown
-                  size={16}
-                  className={`shrink-0 text-[#7b94ab] transition-transform duration-200 ${roleOpen ? "rotate-180" : ""}`}
-                />
-              </div>
-
-              <ul
-                className={`auth-dropdown absolute left-0 right-0 top-[calc(100%+4px)] z-50 max-h-52 overflow-auto rounded-xl border border-sky-100 bg-white shadow-[0_16px_36px_-20px_rgba(15,40,70,0.2)] transition-all duration-200 ${
-                  roleOpen
-                    ? "visible translate-y-0 opacity-100"
-                    : "pointer-events-none invisible -translate-y-1 opacity-0"
-                }`}
-              >
-                {roleLoading && (
-                  <li className="flex items-center gap-2 px-4 py-3 text-sm text-[#7b94ab]">
-                    <Loader2 className="h-4 w-4 animate-spin" /> {REG_TEXT.roleLoading}
-                  </li>
-                )}
-
-                {!roleLoading && roleError && (
-                  <li className="px-4 py-3 text-sm text-red-500">{roleError}</li>
-                )}
-
-                {!roleLoading &&
-                  !roleError &&
-                  roles.map((role) => (
-                    <li
-                      key={role.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setSelectedRole(role);
-                        setRoleOpen(false);
-                      }}
-                      className="cursor-pointer px-4 py-2.5 text-sm text-[#163a5f] transition-colors hover:bg-sky-50 hover:text-[#1f6fd6]"
-                    >
-                      {role.moTa || role.ten}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          </div>
+          <p className="mt-2 text-sm text-slate-600">Tài khoản đăng ký mới cần được quản trị viên cấp vai trò trước khi sử dụng các phân hệ.</p>
 
           {notice.message && (
             <div className="mt-3">

@@ -13,6 +13,8 @@ using System.Text.RegularExpressions;
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
 {
     [ApiController]
+    [Authorize]
+    [RequireFeature("KHAM_BENH")]
     [Route("api/[controller]")]
     public class DonThuocController : ControllerBase
     {

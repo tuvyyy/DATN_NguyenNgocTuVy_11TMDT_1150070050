@@ -47,6 +47,18 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
             if (string.IsNullOrWhiteSpace(req.TenDangNhap) || string.IsNullOrWhiteSpace(req.MatKhau))
                 return BadRequest("Thiếu thông tin đăng ký.");
 
+            if (req.VaiTroIds?.Length > 0)
+            {
+                var actorRaw = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var isAdmin = long.TryParse(actorRaw, out var actorId) && await _db.NguoiDungVaiTros
+                    .AnyAsync(x => x.IdNguoiDung == actorId && x.IdNguoiDungNavigation.HoatDong != false
+                        && (x.IdVaiTroNavigation!.Ten == "ADMIN" || x.IdVaiTroNavigation.Ten == "QUAN_TRI"));
+                if (!isAdmin) return StatusCode(403, new { message = "Chỉ quản trị viên được gán vai trò. Đăng ký tài khoản không kèm vai trò rồi liên hệ quản trị viên để được cấp quyền." });
+                var requestedRoles = req.VaiTroIds.Distinct().ToArray();
+                if (await _db.VaiTros.CountAsync(x => requestedRoles.Contains(x.Id)) != requestedRoles.Length)
+                    return BadRequest(new { message = "Vai trò không tồn tại." });
+            }
+
             var existed = await _db.NguoiDungs.AnyAsync(x => x.TenDangNhap == req.TenDangNhap);
             if (existed) return Conflict("Tài khoản đã tồn tại.");
 
@@ -64,7 +76,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
                 SoLanSai = 0,
                 SoLanKhoa = 0,
                 CreatedAt = DateTime.UtcNow,
-                MaNv = "NV" + DateTime.UtcNow.ToString("yyyyMMddHHmmss")
+                MaNv = "NV" + Guid.NewGuid().ToString("N")[..20]
             };
 
             _db.NguoiDungs.Add(user);

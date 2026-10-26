@@ -12,11 +12,13 @@ namespace DACN.Controllers
     {
     [ApiController]
     [Authorize]
+    [RequireFeature("DVKT")]
     [Route("api/ktv/dvkt")]
     public class ThucHienDVKTController : ControllerBase
     {
         private readonly DACNDbContext _db;
         private readonly IKhamBenhAuditService _audit;
+        private readonly IWebHostEnvironment _environment;
 
         // ===========================
         // TRẠNG THÁI CHUẨN
@@ -32,10 +34,11 @@ namespace DACN.Controllers
         private const string KQ_STATUS_APPROVED = "approved";
         private const string KQ_STATUS_SENT = "sent";
 
-        public ThucHienDVKTController(DACNDbContext db, IKhamBenhAuditService audit)
+        public ThucHienDVKTController(DACNDbContext db, IKhamBenhAuditService audit, IWebHostEnvironment environment)
         {
             _db = db;
             _audit = audit;
+            _environment = environment;
         }
 
         // ============================================================
@@ -726,14 +729,14 @@ namespace DACN.Controllers
                 return BadRequest("Chưa có nội dung kết quả để gửi.");
 
             // ====== 1) TẠO PDF ======
-            var pdfController = new ThucHienDVKTPDFController(_db);
+            var pdfController = new ThucHienDVKTPDFController(_db, _environment);
             var pdfFile = await pdfController.Export(id) as FileContentResult;
 
             if (pdfFile == null)
                 return BadRequest("Không thể tạo PDF.");
 
             // ====== 2) LƯU PDF VÀO WWWROOT ======
-            var folder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/pdf-ketqua");
+            var folder = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "pdf-ketqua");
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
 
@@ -856,7 +859,7 @@ namespace DACN.Controllers
                 .FirstOrDefaultAsync(x => x.Id == id);
 
             // gọi lại controller PDF cũ
-            var pdfCtrl = new ThucHienDVKTPDFController(_db);
+            var pdfCtrl = new ThucHienDVKTPDFController(_db, _environment);
 
             var file = await pdfCtrl.Export(id); // file = FileContentResult
 

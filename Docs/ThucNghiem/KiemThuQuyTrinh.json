@@ -1,0 +1,286 @@
+{
+  "startedAt": "2026-10-26T08:31:03.5451571+00:00",
+  "completedAt": "2026-10-26T08:31:18.7221941+00:00",
+  "dataKind": "synthetic",
+  "isolatedDatabase": true,
+  "passed": 69,
+  "success": true,
+  "checks": [
+    {
+      "name": "D\u1EF1ng database ki\u1EC3m th\u1EED m\u1EDBi t\u1EEB schema v\u00E0 seed c\u00F4ng khai",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/LanKham/lan-kham/1/detail",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/DonThuoc/lan-kham/1",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/HoaDon/1",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/bacsi/dvkt/lankham/1",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/pdf/dvkt/1",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n truy c\u1EADp ch\u01B0a \u0111\u0103ng nh\u1EADp: /api/users/vaitro",
+      "passed": true
+    },
+    {
+      "name": "Kh\u00F4ng t\u1EF1 c\u1EA5p quy\u1EC1n ADMIN khi \u0111\u0103ng k\u00FD c\u00F4ng khai",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: admin_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: reception_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: doctor_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: doctor2_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: lab_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: lab2_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: cashier_e2e",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng k\u00FD c\u00F4ng khai t\u1EA1o t\u00E0i kho\u1EA3n ch\u01B0a c\u00F3 vai tr\u00F2",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng k\u00FD c\u00F4ng khai kh\u00F4ng nh\u1EADn quy\u1EC1n nghi\u1EC7p v\u1EE5 ng\u1EA7m \u0111\u1ECBnh",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng nh\u1EADp b\u1EB1ng m\u1EADt kh\u1EA9u th\u1EADt: pending_e2e",
+      "passed": true
+    },
+    {
+      "name": "T\u00E0i kho\u1EA3n ch\u01B0a \u0111\u01B0\u1EE3c c\u1EA5p vai tr\u00F2 kh\u00F4ng \u0111\u01B0\u1EE3c m\u1EDF kh\u00E1m b\u1EC7nh",
+      "passed": true
+    },
+    {
+      "name": "Qu\u1EA3n tr\u1ECB vi\u00EAn \u0111\u01B0\u1EE3c t\u1EA1o t\u00E0i kho\u1EA3n k\u00E8m vai tr\u00F2",
+      "passed": true
+    },
+    {
+      "name": "Ti\u1EBFp \u0111\u00F3n kh\u00F4ng \u0111\u01B0\u1EE3c s\u1EEDa ph\u00E2n quy\u1EC1n",
+      "passed": true
+    },
+    {
+      "name": "Thu ng\u00E2n kh\u00F4ng \u0111\u01B0\u1EE3c t\u1EA1o ti\u1EBFp \u0111\u00F3n",
+      "passed": true
+    },
+    {
+      "name": "Ti\u1EBFp \u0111\u00F3n t\u1EA1o b\u1EC7nh nh\u00E2n m\u00F4 ph\u1ECFng",
+      "passed": true
+    },
+    {
+      "name": "L\u01B0u l\u1EB7p b\u1EC7nh nh\u00E2n v\u1EDBi c\u00F9ng kh\u00F3a y\u00EAu c\u1EA7u",
+      "passed": true
+    },
+    {
+      "name": "L\u01B0u l\u1EB7p kh\u00F4ng t\u1EA1o tr\u00F9ng b\u1EC7nh nh\u00E2n",
+      "passed": true
+    },
+    {
+      "name": "L\u01B0u h\u1ED3 s\u01A1 v\u00E0 sinh hi\u1EC7u",
+      "passed": true
+    },
+    {
+      "name": "L\u01B0u l\u1EB7p h\u1ED3 s\u01A1 c\u00F3 c\u00F9ng kh\u00F3a y\u00EAu c\u1EA7u",
+      "passed": true
+    },
+    {
+      "name": "Kh\u00F4ng t\u1EA1o tr\u00F9ng h\u1ED3 s\u01A1 \u0111ang ho\u1EA1t \u0111\u1ED9ng",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n d\u1ECBch v\u1EE5 kh\u00E1c khu",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u0103ng k\u00FD d\u1ECBch v\u1EE5 v\u00E0 l\u1EADp h\u00F3a \u0111\u01A1n kh\u00E1m",
+      "passed": true
+    },
+    {
+      "name": "Ch\u01B0a thanh to\u00E1n th\u00EC ch\u01B0a t\u1EA1o h\u00E0ng \u0111\u1EE3i ph\u00F2ng kh\u00E1m",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u01A1n gi\u00E1 kh\u00E1m l\u1EA5y t\u1EEB database",
+      "passed": true
+    },
+    {
+      "name": "Ti\u1EBFp \u0111\u00F3n kh\u00F4ng th\u1EC3 x\u00E1c nh\u1EADn thu ti\u1EC1n",
+      "passed": true
+    },
+    {
+      "name": "Kh\u00F4ng cho x\u00E1c nh\u1EADn VNPay th\u1EE7 c\u00F4ng thay callback",
+      "passed": true
+    },
+    {
+      "name": "Thu ng\u00E2n x\u00E1c nh\u1EADn ti\u1EC1n kh\u00E1m",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n thanh to\u00E1n h\u00F3a \u0111\u01A1n hai l\u1EA7n",
+      "passed": true
+    },
+    {
+      "name": "L\u01B0\u1EE3t v\u00E0o ph\u00F2ng kh\u00E1m gi\u1EEF li\u00EAn k\u1EBFt sinh hi\u1EC7u ti\u1EBFp \u0111\u00F3n",
+      "passed": true
+    },
+    {
+      "name": "B\u00E1c s\u0129 b\u1EAFt \u0111\u1EA7u kh\u00E1m \u0111\u00FAng ph\u00F2ng",
+      "passed": true
+    },
+    {
+      "name": "B\u00E1c s\u0129 kh\u00E1c kh\u00F4ng chi\u1EBFm l\u01B0\u1EE3t \u0111\u00E3 nh\u1EADn",
+      "passed": true
+    },
+    {
+      "name": "B\u00E1c s\u0129 kh\u00E1c kh\u00F4ng \u0111\u1ECDc chi ti\u1EBFt l\u01B0\u1EE3t ngo\u00E0i ph\u1EA1m vi",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n k\u1EBFt lu\u1EADn thi\u1EBFu d\u1EEF li\u1EC7u",
+      "passed": true
+    },
+    {
+      "name": "B\u00E1c s\u0129 ch\u1EC9 \u0111\u1ECBnh c\u1EADn l\u00E2m s\u00E0ng",
+      "passed": true
+    },
+    {
+      "name": "C\u1EADn l\u00E2m s\u00E0ng ch\u01B0a thu ti\u1EC1n ph\u1EA3i b\u1ECB ch\u1EB7n",
+      "passed": true
+    },
+    {
+      "name": "Thu ng\u00E2n x\u00E1c nh\u1EADn ti\u1EC1n c\u1EADn l\u00E2m s\u00E0ng",
+      "passed": true
+    },
+    {
+      "name": "Thu ng\u00E2n kh\u00F4ng \u0111\u01B0\u1EE3c nh\u1EADn l\u00E0m c\u1EADn l\u00E2m s\u00E0ng",
+      "passed": true
+    },
+    {
+      "name": "K\u1EF9 thu\u1EADt vi\u00EAn nh\u1EADn ch\u1EC9 \u0111\u1ECBnh \u0111\u00E3 thanh to\u00E1n",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n hai k\u1EF9 thu\u1EADt vi\u00EAn nh\u1EADn c\u00F9ng ch\u1EC9 \u0111\u1ECBnh",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n k\u1EBFt lu\u1EADn khi c\u1EADn l\u00E2m s\u00E0ng ch\u01B0a c\u00F3 k\u1EBFt qu\u1EA3",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n ho\u00E0n th\u00E0nh c\u1EADn l\u00E2m s\u00E0ng ch\u01B0a nh\u1EADp k\u1EBFt qu\u1EA3",
+      "passed": true
+    },
+    {
+      "name": "K\u1EF9 thu\u1EADt vi\u00EAn kh\u00E1c kh\u00F4ng s\u1EEDa k\u1EBFt qu\u1EA3 \u0111ang ph\u1EE5 tr\u00E1ch",
+      "passed": true
+    },
+    {
+      "name": "Nh\u1EADp n\u1ED9i dung k\u1EBFt qu\u1EA3 m\u00F4 ph\u1ECFng",
+      "passed": true
+    },
+    {
+      "name": "Ho\u00E0n th\u00E0nh c\u1EADn l\u00E2m s\u00E0ng",
+      "passed": true
+    },
+    {
+      "name": "Duy\u1EC7t k\u1EBFt qu\u1EA3",
+      "passed": true
+    },
+    {
+      "name": "G\u1EEDi k\u1EBFt qu\u1EA3 v\u00E0 t\u1EA1o PDF",
+      "passed": true
+    },
+    {
+      "name": "PDF k\u1EBFt qu\u1EA3 \u0111\u01B0\u1EE3c t\u1EA1o trong th\u01B0 m\u1EE5c ki\u1EC3m th\u1EED ri\u00EAng",
+      "passed": true
+    },
+    {
+      "name": "K\u1EBFt qu\u1EA3 \u0111\u00E3 g\u1EEDi kh\u00F4ng \u0111\u01B0\u1EE3c s\u1EEDa tr\u1EF1c ti\u1EBFp",
+      "passed": true
+    },
+    {
+      "name": "B\u00E1c s\u0129 t\u1EA1o \u0111\u01A1n thu\u1ED1c m\u00F4 ph\u1ECFng",
+      "passed": true
+    },
+    {
+      "name": "T\u1ED3n thu\u1ED1c tr\u1EEB \u0111\u00FAng s\u1ED1 l\u01B0\u1EE3ng k\u00EA",
+      "passed": true
+    },
+    {
+      "name": "Ch\u1EB7n t\u1EA1o tr\u00F9ng \u0111\u01A1n thu\u1ED1c",
+      "passed": true
+    },
+    {
+      "name": "K\u1EBFt lu\u1EADn sau khi nh\u1EADn \u0111\u1EA7y \u0111\u1EE7 k\u1EBFt qu\u1EA3 c\u1EADn l\u00E2m s\u00E0ng",
+      "passed": true
+    },
+    {
+      "name": "L\u1EADp h\u00F3a \u0111\u01A1n t\u1EEB \u0111\u01A1n thu\u1ED1c",
+      "passed": true
+    },
+    {
+      "name": "Gi\u00E1 thu\u1ED1c t\u00EDnh t\u1EEB d\u1EEF li\u1EC7u \u0111\u01A1n thu\u1ED1c",
+      "passed": true
+    },
+    {
+      "name": "Thanh to\u00E1n thu\u1ED1c ho\u00E0n t\u1EA5t ca m\u00F4 ph\u1ECFng",
+      "passed": true
+    },
+    {
+      "name": "C\u1EA3 ba h\u00F3a \u0111\u01A1n kh\u00E1m, c\u1EADn l\u00E2m s\u00E0ng, thu\u1ED1c \u0111\u1EC1u \u0111\u00E3 thu",
+      "passed": true
+    },
+    {
+      "name": "\u0110\u1ED1i chi\u1EBFu t\u1ED5ng ti\u1EC1n xuy\u00EAn su\u1ED1t 152000 \u0111\u1ED3ng m\u00F4 ph\u1ECFng",
+      "passed": true
+    },
+    {
+      "name": "C\u00F3 nh\u1EADt k\u00FD thao t\u00E1c kh\u00E1m b\u1EC7nh",
+      "passed": true
+    },
+    {
+      "name": "Th\u1ED1ng k\u00EA m\u1ED9t l\u01B0\u1EE3t kh\u00E1m th\u1EF1c, kh\u00F4ng \u0111\u1EBFm th\u00EAm l\u01B0\u1EE3t n\u1EC1n c\u1EE7a ti\u1EBFp \u0111\u00F3n",
+      "passed": true
+    },
+    {
+      "name": "Vai tr\u00F2 \u0111\u00E3 thu h\u1ED3i b\u1ECB ch\u1EB7n d\u00F9 JWT ch\u01B0a h\u1EBFt h\u1EA1n",
+      "passed": true
+    },
+    {
+      "name": "Ho\u00E0n t\u1EA5t lu\u1ED3ng ti\u1EBFp \u0111\u00F3n \u2192 thu ng\u00E2n \u2192 b\u00E1c s\u0129 \u2192 c\u1EADn l\u00E2m s\u00E0ng \u2192 \u0111\u01A1n thu\u1ED1c \u2192 thanh to\u00E1n",
+      "passed": true
+    }
+  ]
+}

@@ -174,6 +174,7 @@ export default function VisitAnalytics({ canExport }) {
       </details>
       <details className="rounded-xl border border-slate-200 bg-white p-5" open={report.demoCount > 0}><summary className="cursor-pointer text-sm font-semibold">Nguồn dữ liệu và cách tính</summary>
         <p className="mt-3 text-sm text-slate-600">Đọc {number(report.rawCount, 0)} lượt trong khoảng chọn; loại {number(report.excludedInvalid, 0)} lượt không hợp lệ ngoài các lượt hủy. Có {number(report.demoCount, 0)} lượt được nhận diện là dữ liệu demo.</p>
+        {report.excludedReceptionOnly > 0 && <p className="mt-2 text-sm text-slate-600">Trong số lượt đã loại có {number(report.excludedReceptionOnly, 0)} lượt nền tiếp đón chưa phân phòng hoặc bác sĩ; các lượt này không được đếm thêm vào lượt khám.</p>}
         {report.undatedCount > 0 && <p className="mt-2 text-sm text-amber-800">Toàn bộ cơ sở dữ liệu còn {number(report.undatedCount, 0)} lượt thiếu cả thời gian khám và thời điểm tạo, chưa thể đưa vào khoảng thống kê.</p>}
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">{report.notes.map((note) => <li key={note}>{note}</li>)}</ul>
       </details>

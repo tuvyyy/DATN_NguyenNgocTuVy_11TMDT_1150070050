@@ -1,0 +1,10 @@
+{
+    "success":  true,
+    "completedAt":  "2026-10-26T08:35:42.3889790Z",
+    "command":  "npm test -- --watchAll=false --runInBand VisitAnalytics.test.jsx Registration.test.jsx",
+    "suites":  [
+                   "VisitAnalytics.test.jsx",
+                   "Registration.test.jsx"
+               ],
+    "passed":  9
+}

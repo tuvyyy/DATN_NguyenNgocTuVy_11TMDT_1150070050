@@ -1,5 +1,6 @@
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Models;
+using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -113,6 +114,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
     // Controller: UserAccess
     // ============================================================
     [ApiController]
+    [Authorize]
     [Route("api/users")]
     public class UserAccessController : ControllerBase
     {
@@ -296,6 +298,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         }
 
         [HttpPatch("vaitroquyen/{roleId}")]
+        [RequireFeature("PHAN_QUYEN")]
         public async Task<IActionResult> UpdateRolePermissions(int roleId, [FromBody] List<RolePermissionUpdateDto> updates)
         {
             updates ??= new List<RolePermissionUpdateDto>();
@@ -685,6 +688,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         }
 
         [HttpPatch("{id:long}/roles-audit")]
+        [RequireFeature("PHAN_QUYEN")]
         public async Task<IActionResult> UpdateUserRolesWithAudit(long id, [FromBody] List<string> roleNames)
         {
             roleNames ??= new List<string>();
@@ -748,6 +752,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         }
 
         [HttpPost("{id:long}/reception-preset")]
+        [RequireFeature("PHAN_QUYEN")]
         public async Task<IActionResult> ApplyReceptionPreset(long id, [FromBody] ReceptionPresetRequest? req)
         {
             var preset = (req?.Preset ?? "").Trim().ToUpperInvariant();
@@ -844,6 +849,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         }
 
         [HttpPost("clone-permissions")]
+        [RequireFeature("PHAN_QUYEN")]
         public async Task<IActionResult> ClonePermissions([FromBody] ClonePermissionsRequest req)
         {
             if (req.SourceUserId <= 0 || req.TargetUserId <= 0)
@@ -1039,6 +1045,7 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers
         }
 
         [HttpPost("permission-undo-last")]
+        [RequireFeature("PHAN_QUYEN")]
         public async Task<IActionResult> UndoLastPermissionChange([FromBody] UndoPermissionChangeRequest? req)
         {
             var userId = req?.UserId;

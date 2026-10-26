@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Models;
@@ -15,6 +16,7 @@ using System.Text.RegularExpressions;
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers.PDF
 {
     [ApiController]
+    [Authorize]
     [Route("api/pdf/donthuoc")]
     [Authorize]
     public class DonThuocPDFController : ControllerBase

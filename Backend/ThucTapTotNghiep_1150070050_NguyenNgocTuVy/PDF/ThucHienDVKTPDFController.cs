@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
 using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Models;
@@ -10,14 +11,17 @@ using QRCoder;
 namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers.PDF
 {
     [ApiController]
+    [Authorize]
     [Route("api/pdf/dvkt")]
     public class ThucHienDVKTPDFController : ControllerBase
     {
         private readonly DACNDbContext _db;
+        private readonly string _webRoot;
 
-        public ThucHienDVKTPDFController(DACNDbContext db)
+        public ThucHienDVKTPDFController(DACNDbContext db, IWebHostEnvironment environment)
         {
             _db = db;
+            _webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
@@ -167,14 +171,20 @@ namespace ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers.PDF
                 // CHỮ KÝ
                 stack.Item().PaddingTop(40).Row(r =>
                 {
-                    r.RelativeColumn().AlignLeft().Width(120)
-                        .Image("wwwroot/stamps/clinic-stamp.png");
+                    var stamp = Path.Combine(_webRoot, "stamps", "clinic-stamp.png");
+                    if (System.IO.File.Exists(stamp))
+                        r.RelativeColumn().AlignLeft().Width(120).Image(stamp);
+                    else
+                        r.RelativeColumn().Text("Chưa thiết lập dấu phòng khám").FontSize(9);
 
                     r.RelativeColumn().AlignRight().Stack(s =>
                     {
                         s.Item().Text("Chữ ký kỹ thuật viên").Italic();
-                        s.Item().Height(70)
-                            .Image("wwwroot/signatures/doctor-sign.png", ImageScaling.FitHeight);
+                        var signature = Path.Combine(_webRoot, "signatures", "doctor-sign.png");
+                        if (System.IO.File.Exists(signature))
+                            s.Item().Height(70).Image(signature, ImageScaling.FitHeight);
+                        else
+                            s.Item().Text("Chưa thiết lập ảnh chữ ký").FontSize(9);
                     });
                 });
             });

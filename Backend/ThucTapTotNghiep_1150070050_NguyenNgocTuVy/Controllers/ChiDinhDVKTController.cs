@@ -10,6 +10,8 @@ using System.Security.Claims;
 namespace DACN.Controllers
 {
     [ApiController]
+    [Authorize]
+    [RequireFeature("KHAM_BENH")]
     [Route("api/bacsi/dvkt")]
     public class ChiDinhDVKTController : ControllerBase
     {
@@ -345,7 +347,6 @@ namespace DACN.Controllers
             });
         }
 
-        [AllowAnonymous]
         [HttpGet("lankham/{idLanKham}")]
         public async Task<IActionResult> GetByLanKham(long idLanKham)
         {
@@ -359,7 +360,6 @@ namespace DACN.Controllers
             return Ok(data);
         }
 
-        [AllowAnonymous]
         [HttpGet("lankham/{idLanKham}/tonghop")]
         public async Task<IActionResult> GetTongHopLanKham(long idLanKham)
         {
@@ -582,7 +582,6 @@ namespace DACN.Controllers
             return Ok("Da huy chi dinh.");
         }
 
-        [AllowAnonymous]
         [HttpGet("full")]
         public async Task<IActionResult> GetAllFull()
         {

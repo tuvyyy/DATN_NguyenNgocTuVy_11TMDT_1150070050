@@ -36,6 +36,8 @@ Dữ liệu demo đã có trong SQL Server được nhận diện theo tiền t�
 
 Mỗi ID lượt khám chỉ được tính một lần. Truy vấn không nối với các tập nhiều dòng như đơn thuốc hoặc chỉ định dịch vụ; do đó một lượt có nhiều thuốc/dịch vụ không làm tăng số lượt thống kê. Bác sĩ được phân biệt theo ID, kể cả khi trùng họ tên.
 
+Luồng tiếp đón tạo một lượt nền trước khi thu ngân tạo lượt theo phòng khám. Lượt chưa có cả `IdPhong` lẫn `IdBacSi` được loại khỏi số lượt khám, kể cả khi trạng thái là `TIEP_DON`; số này nằm trong `excludedInvalid` và được giải thích thêm bằng `excludedReceptionOnly`. Vì vậy một ca tiếp đón vào một phòng không bị đếm thành hai lượt. Các lượt theo nhiều phòng thực sự khác nhau vẫn được đếm theo từng ID lượt khám.
+
 Loại các lượt có trạng thái của lượt hoặc hồ sơ là `HUY`, `DA_HUY`, `CANCELLED`, `CANCELED` sau khi bỏ khoảng trắng và không phân biệt hoa/thường. Các bản nháp `NHAP`, `DRAFT`, lượt thiếu ID hợp lệ, bệnh nhân, thời điểm hoặc trạng thái cũng bị loại. Các trạng thái không rỗng còn lại, bao gồm chờ khám, được tính là lượt phát sinh; không đồng nhất chỉ số này với số ca đã khám xong.
 
 `rawCount` là số ID lượt có thời điểm nằm trong khoảng chọn. Trong nhóm này:

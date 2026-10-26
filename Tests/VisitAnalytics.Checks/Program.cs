@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -76,6 +77,8 @@ Check(report.Hourly.Sum(x => x.Count) == report.ValidCount && report.Doctors.Sum
     && report.DiseaseGroups.Single().Label == "J10", "Aggregate dimensions reconcile to unique visit totals");
 var sameName = VisitAnalyticsBuilder.Build(new[] { january with { DoctorId = 1 }, march with { DoctorId = 2 } }, new(2024, 1, 1), new(2024, 5, 31), new(2024, 6, 15));
 Check(sameName.Doctors.Count == 2, "Doctors with identical names retain separate counts by ID");
+var placeholder = VisitAnalyticsBuilder.Build(new[] { january, march with { IsRegistrationPlaceholder = true } }, new(2024, 1, 1), new(2024, 5, 31), new(2024, 6, 15));
+Check(placeholder.ValidCount == 1 && placeholder.ExcludedReceptionOnly == 1, "Reception-only base records do not inflate clinical visit counts");
 var partial = VisitAnalyticsBuilder.Build(new[] { january, march }, new(2024, 1, 15), new(2024, 3, 15), new(2024, 3, 15));
 Check(partial.Monthly.Count == 0, "Partial boundary/current months are excluded and no pre-observation history is fabricated");
 var current = VisitAnalyticsBuilder.Build(new[] { january, march }, new(2024, 1, 1), new(2024, 3, 31), new(2024, 3, 31));
@@ -83,6 +86,25 @@ Check(current.Monthly.Count == 2 && current.Monthly[^1].Month == "2024-02", "Eve
 Check(!VisitAnalyticsBuilder.Build(Array.Empty<VisitObservation>(), new(2024, 1, 1), new(2024, 12, 31), new(2025, 1, 1)).Forecast.Available, "Empty database does not fabricate a zero-valued history");
 var simulated = VisitAnalyticsService.BuildDemo(new(2022, 1, 1), new(2024, 12, 31), 6, 6);
 Check(simulated.DataKind == "synthetic" && simulated.Forecast.Available && simulated.ValidCount == simulated.DemoCount, "Explicitly labeled simulated data exercises the complete report");
+
+var experimentOutput = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../Docs/ThucNghiem"));
+if (args.Contains("--export-experiment"))
+{
+    Directory.CreateDirectory(experimentOutput);
+    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
+    await File.WriteAllTextAsync(Path.Combine(experimentOutput, "DuBao_MoPhong_36Thang.json"), JsonSerializer.Serialize(simulated, jsonOptions));
+    var csv = new StringBuilder("Thang,ThucTe,XuHuong,TapDuLieu,DuBaoKiemTra,DuBaoTiepTheo\r\n");
+    string Numeric(double? value) => value?.ToString("0.########", CultureInfo.InvariantCulture) ?? "";
+    foreach (var month in simulated.Monthly)
+    {
+        var fit = simulated.Trend!.Points.Single(x => x.Month == month.Month).Value;
+        var test = simulated.Forecast.Validation.FirstOrDefault(x => x.Month == month.Month);
+        csv.AppendLine($"{month.Month},{month.Count},{Numeric(fit)},{(test == null ? "train" : "test")},{Numeric(test?.Predicted)},");
+    }
+    foreach (var month in simulated.Forecast.Future) csv.AppendLine($"{month.Month},,,forecast,,{Numeric(month.Predicted)}");
+    await File.WriteAllTextAsync(Path.Combine(experimentOutput, "DuBao_MoPhong_36Thang.csv"), csv.ToString(), new UTF8Encoding(true));
+    Console.WriteLine("Exported reproducible synthetic experiment (2022-01 through 2024-12).");
+}
 
 if (args.Contains("--database"))
 {
@@ -130,6 +152,17 @@ if (args.Contains("--database"))
     var liveResponse = await client.GetAsync("/api/bao-cao/visits?fromDate=2022-01-01&toDate=" + DateTime.UtcNow.AddHours(7).ToString("yyyy-MM-dd"));
     if (!liveResponse.IsSuccessStatusCode) throw new Exception("Live API failed: " + await liveResponse.Content.ReadAsStringAsync());
     var live = (await liveResponse.Content.ReadFromJsonAsync<VisitAnalyticsReport>())!;
+    if (args.Contains("--export-experiment"))
+    {
+        // Only clinic-level aggregates are published; never export patient records or staff names.
+        await File.WriteAllTextAsync(Path.Combine(experimentOutput, "DuLieuHienTai_TongHop.json"), JsonSerializer.Serialize(new
+        {
+            live.DataKind, live.GeneratedAt, live.From, live.To, live.RawCount, live.ValidCount,
+            live.ExcludedCancelled, live.ExcludedInvalid, live.ExcludedReceptionOnly, live.UndatedCount, live.DemoCount,
+            live.Monthly, forecastAvailable = live.Forecast.Available, forecastMessage = live.Forecast.Message,
+            note = "Số liệu tổng hợp từ database phát triển, có dữ liệu demo; không khẳng định đây là lịch sử vận hành thực tế."
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+    }
     Check(live.DataKind == "database" && live.RawCount == before, "Real SQL Server query translates and source count matches database");
     Check(live.ValidCount + live.ExcludedCancelled + live.ExcludedInvalid == live.RawCount && live.Daily.Sum(x => x.Count) == live.ValidCount, "Real database preprocessing reconciles counts");
     var fromDate = new DateTime(2022, 1, 1);
@@ -138,6 +171,7 @@ if (args.Contains("--database"))
         SELECT COUNT(*) AS [Value] FROM dbo.lan_kham lk
         LEFT JOIN dbo.ho_so_benh_an hs ON hs.id = lk.id_ho_so
         WHERE lk.id > 0 AND lk.id_benh_nhan > 0
+          AND (lk.id_phong IS NOT NULL OR lk.id_bac_si IS NOT NULL)
           AND COALESCE(lk.thoi_gian_bat_dau, lk.created_at) >= {fromDate}
           AND COALESCE(lk.thoi_gian_bat_dau, lk.created_at) < {endDate}
           AND UPPER(LTRIM(RTRIM(COALESCE(lk.trang_thai, '')))) NOT IN ('', 'NHAP', 'DRAFT', 'HUY', 'DA_HUY', 'CANCELLED', 'CANCELED')
@@ -156,3 +190,6 @@ if (args.Contains("--database"))
     await app.StopAsync();
 }
 Console.WriteLine($"All {passed} checks passed.");
+if (args.Contains("--export-experiment"))
+    await File.WriteAllTextAsync(Path.Combine(experimentOutput, "KiemThuThongKe.json"), JsonSerializer.Serialize(new
+    { completedAt = DateTimeOffset.UtcNow, passed, databaseChecks = args.Contains("--database"), success = true }, new JsonSerializerOptions { WriteIndented = true }));

@@ -6,7 +6,7 @@ DECLARE @ToDate date = CONVERT(date, DATEADD(hour, 7, SYSUTCDATETIME()));
 
 ;WITH Source AS
 (
-    SELECT lk.id, lk.id_benh_nhan,
+    SELECT lk.id, lk.id_benh_nhan, lk.id_phong, lk.id_bac_si,
            COALESCE(lk.thoi_gian_bat_dau, lk.created_at) AS visit_at,
            UPPER(LTRIM(RTRIM(COALESCE(lk.trang_thai, '')))) AS status,
            UPPER(LTRIM(RTRIM(COALESCE(hs.trang_thai, '')))) AS record_status
@@ -20,7 +20,7 @@ DECLARE @ToDate date = CONVERT(date, DATEADD(hour, 7, SYSUTCDATETIME()));
         CASE WHEN status IN ('HUY', 'DA_HUY', 'CANCELLED', 'CANCELED')
                    OR record_status IN ('HUY', 'DA_HUY', 'CANCELLED', 'CANCELED')
              THEN 1 ELSE 0 END AS cancelled,
-        CASE WHEN id > 0 AND id_benh_nhan > 0 AND status NOT IN ('', 'NHAP', 'DRAFT')
+        CASE WHEN id > 0 AND id_benh_nhan > 0 AND (id_phong IS NOT NULL OR id_bac_si IS NOT NULL) AND status NOT IN ('', 'NHAP', 'DRAFT')
              THEN 1 ELSE 0 END AS otherwise_valid
     FROM Source
 )
@@ -42,6 +42,7 @@ WHERE thoi_gian_bat_dau IS NULL AND created_at IS NULL;
     FROM dbo.lan_kham lk
     LEFT JOIN dbo.ho_so_benh_an hs ON hs.id = lk.id_ho_so
     WHERE lk.id > 0 AND lk.id_benh_nhan > 0
+      AND (lk.id_phong IS NOT NULL OR lk.id_bac_si IS NOT NULL)
       AND UPPER(LTRIM(RTRIM(COALESCE(lk.trang_thai, '')))) NOT IN ('', 'NHAP', 'DRAFT', 'HUY', 'DA_HUY', 'CANCELLED', 'CANCELED')
       AND UPPER(LTRIM(RTRIM(COALESCE(hs.trang_thai, '')))) NOT IN ('HUY', 'DA_HUY', 'CANCELLED', 'CANCELED')
       AND COALESCE(lk.thoi_gian_bat_dau, lk.created_at) >= @FromDate

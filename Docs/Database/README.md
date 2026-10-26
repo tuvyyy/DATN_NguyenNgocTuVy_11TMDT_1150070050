@@ -25,6 +25,8 @@ Mở SQL Server Management Studio (SSMS), chọn Windows Authentication, nhập 
 
 Sau khi kết nối, mở **Databases → DACN → Tables**. Nếu chưa thấy database, bấm Refresh và kiểm tra đang kết nối đúng instance. Máy phát triển hiện tại đã có dữ liệu; không cần tạo lại hay chạy `01_Schema.sql` lên database này.
 
+Nếu SSMS báo chứng chỉ không được tin cậy khi kết nối SQL Server local: đóng thông báo lỗi, giữ `Encrypt = Mandatory`, tích **Trust Server Certificate** trong cửa sổ kết nối rồi Connect lại. Đây là thiết lập cho instance local đang dùng trong dự án.
+
 Các file lưu trữ vật lý hiện được SQL Server đặt tại:
 
 ```text
