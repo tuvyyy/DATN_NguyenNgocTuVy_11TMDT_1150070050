@@ -42,7 +42,7 @@ Tiếp đón → Chỉ định khám/dịch vụ → Thu ngân → Bác sĩ khá
 | Frontend | React 19, React Router 7, Tailwind CSS 3, Axios, Create React App |
 | Backend | ASP.NET Core Web API, .NET 8, Entity Framework Core 9 |
 | Cơ sở dữ liệu | Microsoft SQL Server |
-| Xác thực | JWT Bearer, BCrypt |
+| Xác thực | JWT Bearer, PBKDF2-SHA256 trong luồng đăng nhập hiện tại |
 | Cập nhật thời gian thực | SignalR |
 | Tài liệu API | Swagger / OpenAPI |
 | Tiện ích | QuestPDF, QRCoder, thư viện xuất Excel, tích hợp VNPay |
@@ -101,7 +101,9 @@ Các lệnh bên dưới được thực hiện từ thư mục gốc vừa tả
 
 ### 3. Chuẩn bị cơ sở dữ liệu và cấu hình
 
-Repo hiện chứa các script **cập nhật cấu trúc và tạo dữ liệu demo**, chưa có bản sao lưu `.bak` hoặc script tạo đầy đủ cơ sở dữ liệu ban đầu. Cần khôi phục cơ sở dữ liệu của dự án trước khi sử dụng các phân hệ nghiệp vụ; chỉ tạo một database rỗng là chưa đủ.
+Repo có bộ SQL dựng database từ đầu tại [Docs/Database](Docs/Database/README.md): tạo database, cấu trúc đầy đủ 58 bảng, cấu hình vai trò/quyền tối thiểu và script tạo quản trị viên với mật khẩu tự chọn. Chạy theo thứ tự `00_CreateDatabase.sql` → `01_Schema.sql` → `02_SeedBase.sql` → `03_CreateAdmin.ps1` như hướng dẫn. Chỉ chạy schema trên database mới/trống; không chạy lại trên database `DACN` đã có dữ liệu.
+
+Bộ SQL này không chứa toàn bộ dữ liệu đang dùng trên máy phát triển. Nếu cần chuyển nguyên dữ liệu sang máy khác, tạo và khôi phục bản backup `.bak` bằng SQL Server. Khi cài từ SQL sạch, cần bổ sung danh mục và dữ liệu nghiệp vụ trước khi chạy các ca khám.
 
 Bổ sung mục `ConnectionStrings` vào file `Backend/ThucTapTotNghiep_1150070050_NguyenNgocTuVy/appsettings.Development.json`, giữ lại các cấu hình khác đang có. Ví dụ với SQL Server dùng Windows Authentication:
 
@@ -181,6 +183,7 @@ Kết quả build frontend nằm trong thư mục `Frontend/layout-dacn/build/`.
 ## Tài liệu và demo
 
 - [Hướng dẫn thống kê, hồi quy và dự báo Holt-Winters](Docs/ThongKeDuBaoLuotKham.md).
+- [SQL và hướng dẫn tạo/khôi phục database](Docs/Database/README.md).
 - [Hướng dẫn sử dụng hệ thống](Docs/HuongDanSuDung.md).
 - [Kịch bản demo tiếp đón](Docs/KichBanDemoTiepDon.md).
 - [Danh sách kiểm tra nghiệm thu tiếp đón](Docs/reception_acceptance_checklist.md).
