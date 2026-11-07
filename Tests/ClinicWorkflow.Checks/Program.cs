@@ -16,14 +16,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Dtos;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Models;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Services;
+using Clinic.Api.Controllers;
+using Clinic.Api.Data;
+using Clinic.Api.Dtos;
+using Clinic.Api.Models;
+using Clinic.Api.Services;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-var output = Path.Combine(root, "Docs/ThucNghiem");
+var output = Path.Combine(root, "TestResults");
 var checks = new List<object>();
 var passed = 0;
 void Check(bool condition, string name)
@@ -52,7 +52,7 @@ try
     {
         await connection.OpenAsync();
         foreach (var file in new[] { "01_Schema.sql", "02_SeedBase.sql" })
-        foreach (var batch in Regex.Split(await File.ReadAllTextAsync(Path.Combine(root, "Docs/Database", file)), @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+        foreach (var batch in Regex.Split(await File.ReadAllTextAsync(Path.Combine(root, "Database", file)), @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(batch)) continue;
             using var command = new SqlCommand(batch, connection) { CommandTimeout = 60 };

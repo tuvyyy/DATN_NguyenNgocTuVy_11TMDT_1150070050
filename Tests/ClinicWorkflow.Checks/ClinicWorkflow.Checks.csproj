@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="../../Backend/ThucTapTotNghiep_1150070050_NguyenNgocTuVy/ThucTapTotNghiep_1150070050_NguyenNgocTuVy.csproj" />
+    <ProjectReference Include="../../Backend/Clinic.Api/Clinic.Api.csproj" />
   </ItemGroup>
 </Project>

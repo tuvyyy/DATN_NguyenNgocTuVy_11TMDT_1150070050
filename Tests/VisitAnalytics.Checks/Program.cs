@@ -16,9 +16,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Controllers;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Data;
-using ThucTapTotNghiep_1150070050_NguyenNgocTuVy.Services;
+using Clinic.Api.Controllers;
+using Clinic.Api.Data;
+using Clinic.Api.Services;
 
 var passed = 0;
 void Check(bool condition, string label)
@@ -87,7 +87,7 @@ Check(!VisitAnalyticsBuilder.Build(Array.Empty<VisitObservation>(), new(2024, 1,
 var simulated = VisitAnalyticsService.BuildDemo(new(2022, 1, 1), new(2024, 12, 31), 6, 6);
 Check(simulated.DataKind == "synthetic" && simulated.Forecast.Available && simulated.ValidCount == simulated.DemoCount, "Explicitly labeled simulated data exercises the complete report");
 
-var experimentOutput = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../Docs/ThucNghiem"));
+var experimentOutput = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../TestResults"));
 if (args.Contains("--export-experiment"))
 {
     Directory.CreateDirectory(experimentOutput);
@@ -109,7 +109,7 @@ if (args.Contains("--export-experiment"))
 if (args.Contains("--database"))
 {
     var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-    var backend = Path.Combine(root, "Backend/ThucTapTotNghiep_1150070050_NguyenNgocTuVy");
+    var backend = Path.Combine(root, "Backend/Clinic.Api");
     if (!Directory.Exists(backend)) throw new Exception("Cannot locate repository for read-only database checks.");
     var config = new ConfigurationBuilder().SetBasePath(backend).AddJsonFile("appsettings.json").AddJsonFile("appsettings.Development.json", true).Build();
     var builder = WebApplication.CreateBuilder();

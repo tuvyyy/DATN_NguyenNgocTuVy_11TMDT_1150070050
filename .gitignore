@@ -2,12 +2,23 @@
 **/bin/
 **/obj/
 .vs/
+**/bin_temp*/
 
 # Node/React
 **/node_modules/
 **/build/
 **/dist/
 **/.vite/
+**/coverage/
+
+# Local assistant settings and generated test reports
+.agents/
+.claude/
+/TestResults/
+
+# Files generated while using the app
+Backend/Clinic.Api/wwwroot/pdf-ketqua/
+Backend/Clinic.Api/wwwroot/uploads/
 
 # OS
 Thumbs.db
