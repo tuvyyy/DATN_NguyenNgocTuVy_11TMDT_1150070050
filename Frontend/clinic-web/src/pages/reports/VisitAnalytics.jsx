@@ -1,69 +1,107 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Download, Loader2, TrendingUp } from "lucide-react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { exportVisitAnalytics, getVisitAnalytics } from "../../api/BaoCaoApi";
+import "./VisitAnalytics.css";
 
-const number = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("vi-VN", { maximumFractionDigits: digits });
-const inputClass = "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100";
-const dateText = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const count = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toLocaleString("vi-VN", { maximumFractionDigits: digits });
+const monthName = (value) => /^\d{4}-\d{2}$/.test(value || "") ? `${value.slice(5)}/${value.slice(0, 4)}` : value || "—";
+const dateText = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const initialFilters = () => {
   const now = new Date();
-  return { fromDate: dateText(new Date(now.getFullYear(), now.getMonth() - 36, 1)),
-    toDate: dateText(new Date(now.getFullYear(), now.getMonth(), 0)), horizon: 6, testMonths: 6, demo: false };
+  return { fromDate: dateText(new Date(now.getFullYear(), now.getMonth() - 36, 1)), toDate: dateText(new Date(now.getFullYear(), now.getMonth(), 0)), horizon: 6, testMonths: 6, demo: false };
+};
+const filterProblem = (params) => {
+  const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value.slice(0, 4) >= "1900" && Number.isFinite(Date.parse(value));
+  if (!validDate(params.fromDate) || !validDate(params.toDate)) return "Chọn đủ ngày bắt đầu và ngày kết thúc.";
+  if (params.fromDate > params.toDate) return "Ngày bắt đầu cần trước hoặc trùng ngày kết thúc.";
+  if (params.toDate > dateText(new Date())) return "Ngày kết thúc không được vượt quá hôm nay.";
+  if ((Date.parse(params.toDate) - Date.parse(params.fromDate)) / 86400000 > 3660) return "Chọn khoảng thời gian trong vòng 10 năm.";
+  if (!Number.isInteger(params.horizon) || params.horizon < 1 || params.horizon > 12
+    || !Number.isInteger(params.testMonths) || params.testMonths < 1 || params.testMonths > 12) return "Số tháng cần nằm trong khoảng từ 1 đến 12.";
+  return "";
 };
 
-export function SeriesChart({ labels, series, title }) {
-  if (!labels.length) return <p className="py-10 text-center text-sm text-slate-500">Chưa có tháng đầy đủ để vẽ biểu đồ.</p>;
-  const values = series.flatMap((s) => s.values.filter((x) => x != null && Number.isFinite(x)));
-  const min = Math.min(0, ...values);
-  const max = Math.max(1, ...values);
-  const span = max - min || 1;
+function Disclosure({ title, children }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <section className={`vr-disclosure${open ? " vr-disclosure-open" : ""}`}>
+    <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+      <span>{title}</span><span aria-hidden="true">{open ? "−" : "+"}</span>
+    </button>
+    {open && <div id={id} className="vr-disclosure-body">{children}</div>}
+  </section>;
+}
+
+export function SeriesChart({ labels, series, title, zeroLine = false, valueDigits = 0, futureStart }) {
+  const [selected, setSelected] = useState(null);
+  const signature = labels.join(",");
+  useEffect(() => setSelected(null), [signature]);
+  if (!labels.length) return <p className="vr-empty">Chưa có số liệu theo tháng.</p>;
+  const values = series.flatMap((item) => item.values.filter(Number.isFinite));
+  const low = Math.min(0, ...values);
+  const high = Math.max(1, ...values);
+  const span = high - low || 1;
   const x = (i) => 65 + i * 820 / Math.max(1, labels.length - 1);
-  const y = (v) => 265 - (v - min) / span * 230;
-  const path = (items) => {
+  const y = (v) => 270 - (v - low) / span * 225;
+  const active = selected != null && selected < labels.length ? selected : Math.max(0, (futureStart ?? labels.length) - 1);
+  const path = (items, connectFrom) => {
     let connected = false;
     return items.map((v, i) => {
-      if (v == null || !Number.isFinite(v)) { connected = false; return ""; }
-      const segment = `${connected ? "L" : "M"}${x(i)},${y(v)}`;
+      if (!Number.isFinite(v)) { connected = false; return ""; }
+      const start = !connected && connectFrom && i === connectFrom.index + 1
+        ? `M${x(connectFrom.index)},${y(connectFrom.value)}L` : connected ? "L" : "M";
+      const point = `${start}${x(i)},${y(v)}`;
       connected = true;
-      return segment;
+      return point;
     }).join(" ");
   };
-  return <div>
-    <div className="mb-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
-      {series.map((s) => <span key={s.name} className="inline-flex items-center gap-2"><span className="inline-block h-1 w-5 rounded" style={{ backgroundColor: s.color }} />{s.name}</span>)}
-    </div>
-    <div className="overflow-x-auto">
-      <svg viewBox="0 0 930 315" className="w-full min-w-[560px]" role="img" aria-label={title}>
+  return <div className="vr-chart">
+    <div className="vr-chart-legend">{series.map((item) => <span key={item.name}>
+      <i style={{ borderColor: item.color, borderTopStyle: item.dashed ? "dashed" : "solid" }} />{item.name}
+    </span>)}</div>
+    <div className="vr-chart-scroll">
+      <svg viewBox="0 0 930 320" role="img" aria-label={title}>
         <title>{title}</title>
-        {Array.from({ length: 5 }, (_, i) => min + span * i / 4).map((v, i) => <g key={i}>
+        <text x="65" y="20" fontSize="13" fill="#64748b">Lượt khám</text>
+        {futureStart != null && futureStart < labels.length && <g>
+          <rect x={x(futureStart) - 10} y="32" width={895 - x(futureStart)} height="238" fill="#f0fdfa" />
+          <text x={x(futureStart)} y="25" fontSize="13" fill="#0f766e">Dự kiến</text>
+        </g>}
+        {Array.from({ length: 5 }, (_, i) => low + span * i / 4).map((v, i) => <g key={i}>
           <line x1="65" x2="885" y1={y(v)} y2={y(v)} stroke="#e2e8f0" />
-          <text x="55" y={y(v) + 4} textAnchor="end" fontSize="11" fill="#64748b">{number(v, 0)}</text>
+          <text x="54" y={y(v) + 5} textAnchor="end" fontSize="13" fill="#64748b">{count(v, valueDigits)}</text>
         </g>)}
-        {labels.map((label, i) => i % Math.max(1, Math.ceil(labels.length / 8)) === 0 || i === labels.length - 1
-          ? <text key={label} x={x(i)} y="291" textAnchor="middle" fontSize="11" fill="#64748b">{label}</text> : null)}
-        {series.map((s) => <g key={s.name}>
-          <path d={path(s.values)} fill="none" stroke={s.color} strokeWidth="2.5" strokeDasharray={s.dashed ? "7 5" : undefined} />
-          {s.values.map((v, i) => v == null ? null : <circle key={i} cx={x(i)} cy={y(v)} r="3" fill={s.color}>
-            <title>{`${labels[i]} · ${s.name}: ${number(v)} lượt`}</title>
+        {zeroLine && <line x1="65" x2="885" y1={y(0)} y2={y(0)} stroke="#64748b" strokeDasharray="5 4"><title>Không chênh lệch</title></line>}
+        {labels.map((label, i) => i % Math.max(1, Math.ceil(labels.length / 7)) === 0 || i === labels.length - 1
+          ? <text key={label} x={x(i)} y="301" textAnchor="middle" fontSize="13" fill="#64748b">{monthName(label)}</text> : null)}
+        {selected != null && selected < labels.length && <line x1={x(selected)} x2={x(selected)} y1="35" y2="270" stroke="#94a3b8" strokeDasharray="4 4" />}
+        {series.map((item) => <g key={item.name}>
+          <path d={path(item.values, item.connectFrom)} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={item.dashed ? "7 5" : undefined} />
+          {item.values.map((value, i) => !Number.isFinite(value) ? null : <circle key={i} cx={x(i)} cy={y(value)} r={selected === i ? 6 : 4}
+            fill={item.color} stroke="white" strokeWidth="2" tabIndex="0" aria-label={`${monthName(labels[i])}, ${item.name}: ${count(value, valueDigits)} lượt`}
+            onMouseEnter={() => setSelected(i)} onFocus={() => setSelected(i)} onClick={() => setSelected(i)}>
+            <title>{`${monthName(labels[i])} · ${item.name}: ${count(value, valueDigits)} lượt`}</title>
           </circle>)}
         </g>)}
       </svg>
     </div>
+    <div className="vr-chart-readout" aria-live="polite"><strong>{monthName(labels[active])}</strong>
+      {series.filter((item) => Number.isFinite(item.values[active])).map((item) => <span key={item.name}>{item.name}: <strong>{count(item.values[active], valueDigits)} lượt</strong></span>)}
+    </div>
   </div>;
 }
 
-function CountTable({ title, rows }) {
-  return <article className="rounded-xl border border-slate-200 bg-white p-5">
-    <h3 className="mb-3 font-semibold text-slate-800">{title}</h3>
-    <div className="max-h-72 overflow-auto">
-      <table className="w-full text-sm"><thead className="sticky top-0 bg-white text-left text-xs text-slate-500"><tr>
-        <th className="py-2 font-medium">Nhóm</th><th className="py-2 text-right font-medium">Lượt khám</th>
-      </tr></thead><tbody>{rows.map((r) => <tr key={r.label} className="border-t border-slate-100">
-        <td className="py-2 pr-3">{r.label}</td><td className="py-2 text-right tabular-nums">{number(r.count, 0)}</td>
-      </tr>)}</tbody></table>
-      {!rows.length && <p className="py-5 text-sm text-slate-500">Không có dữ liệu.</p>}
-    </div>
-  </article>;
+function CountList({ rows, empty = "Chưa có số liệu." }) {
+  const [showAll, setShowAll] = useState(false);
+  const maximum = Math.max(1, ...rows.map((row) => row.count));
+  const visible = showAll ? rows : rows.slice(0, 5);
+  return <>
+    {!rows.length && <p className="vr-empty">{empty}</p>}
+    <ol className="vr-count-list">{visible.map((row) => <li key={row.label}>
+      <div><span>{row.label.replace(/\s*\(#\d+\)$/, "")}</span><strong>{count(row.count)} <small>lượt</small></strong></div>
+      <div className="vr-bar" aria-hidden="true"><span style={{ width: `${row.count / maximum * 100}%` }} /></div>
+    </li>)}</ol>
+    {rows.length > 5 && <button className="vr-text-button" type="button" onClick={() => setShowAll(!showAll)}>{showAll ? "Thu gọn" : `Xem đủ ${rows.length} mục`}</button>}
+  </>;
 }
 
 export default function VisitAnalytics({ canExport }) {
@@ -71,113 +109,157 @@ export default function VisitAnalytics({ canExport }) {
   const [filters, setFilters] = useState(initial);
   const [usedFilters, setUsedFilters] = useState(null);
   const [report, setReport] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+  const [allMonths, setAllMonths] = useState(false);
+  const [view, setView] = useState("monthly");
   const requestVersion = useRef(0);
-  const cancelPending = useCallback(() => { requestVersion.current++; }, []);
+  const inFlight = useRef(null);
+  const previousFilters = useRef(filters);
+  const pendingLoad = useRef(null);
   const load = useCallback(async (params) => {
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
     const version = ++requestVersion.current;
-    setLoading(true); setError(""); setReport(null);
+    setLoading(true); setError("");
     try {
-      const data = await getVisitAnalytics(params);
+      const data = await getVisitAnalytics(params, { signal: controller.signal });
       if (version === requestVersion.current) { setReport(data); setUsedFilters(params); }
-    } catch (e) {
-      if (version === requestVersion.current) setError(e.message || "Không tải được phân tích.");
-    } finally { if (version === requestVersion.current) setLoading(false); }
+    } catch (failure) {
+      if (version === requestVersion.current) { setError(failure.message || "Chưa tải được báo cáo. Vui lòng thử lại."); setReport(null); }
+    } finally { if (version === requestVersion.current) { setLoading(false); inFlight.current = null; } }
   }, []);
-  useEffect(() => { load(initial); return cancelPending; }, [initial, load, cancelPending]);
-  const update = (key, value) => setFilters((p) => ({ ...p, [key]: value }));
+  const cancelPending = useCallback(() => { requestVersion.current++; inFlight.current?.abort(); inFlight.current = null; }, []);
+  useEffect(() => {
+    const before = previousFilters.current;
+    previousFilters.current = filters;
+    const problem = filterProblem(filters);
+    if (problem) { setError(problem); setLoading(false); return cancelPending; }
+    const waitForTyping = before.fromDate !== filters.fromDate || before.toDate !== filters.toDate || before.testMonths !== filters.testMonths;
+    setLoading(true); setError("");
+    const timer = waitForTyping ? setTimeout(() => { pendingLoad.current = null; load({ ...filters }); }, 400) : null;
+    pendingLoad.current = timer;
+    if (!waitForTyping) load({ ...filters });
+    return () => { clearTimeout(timer); cancelPending(); };
+  }, [filters, load, cancelPending]);
+  const update = (key, value) => { cancelPending(); setFilters((previous) => ({ ...previous, [key]: value })); };
+  const loadExample = () => { cancelPending(); setFilters({ ...initialFilters(), demo: true }); };
+  const refresh = () => {
+    clearTimeout(pendingLoad.current);
+    const problem = filterProblem(filters);
+    if (problem) { setError(problem); return; }
+    load({ ...filters });
+  };
   const download = async (format) => {
-    if (!usedFilters || !canExport) return;
+    if (!report || !usedFilters || !canExport || loading || filterProblem(filters)) return;
     setExporting(true); setError("");
     try {
       const response = await exportVisitAnalytics({ ...usedFilters, format });
       const url = URL.createObjectURL(new Blob([response.data], { type: format === "json" ? "application/json" : "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
-      link.href = url; link.download = `phan-tich-luot-kham-${usedFilters.demo ? "MO-PHONG-" : ""}${usedFilters.fromDate}-${usedFilters.toDate}.${format}`;
+      link.href = url;
+      link.download = `luot-kham-${report.demoCount > 0 || usedFilters.demo ? "MINH-HOA-" : ""}${usedFilters.fromDate}-${usedFilters.toDate}.${format === "json" ? "json" : "csv"}`;
       document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-    } catch (e) { setError(e.message || "Không xuất được phân tích."); }
+    } catch (failure) { setError(failure.message || "Chưa tải được bảng số liệu."); }
     finally { setExporting(false); }
   };
+  const months = report?.monthly || [];
+  const last = months.at(-1);
+  const previous = months.at(-2);
+  const change = last && previous ? last.count - previous.count : null;
+  const percent = previous?.count > 0 && change != null ? change / previous.count * 100 : null;
   const forecast = report?.forecast;
-  const labels = [...(report?.monthly || []).map((m) => m.month), ...(forecast?.future || []).map((m) => m.month)];
-  const actualByMonth = new Map((report?.monthly || []).map((m) => [m.month, m.count]));
-  const trendByMonth = new Map((report?.trend?.points || []).map((m) => [m.month, m.value]));
-  const validationByMonth = new Map((forecast?.validation || []).map((m) => [m.month, m.predicted]));
-  const futureByMonth = new Map((forecast?.future || []).map((m) => [m.month, m.predicted]));
-  const peak = (report?.hourly || []).reduce((best, row) => row.count > (best?.count || 0) ? row : best, null);
-  return <div className="space-y-5">
-    <form onSubmit={(e) => { e.preventDefault(); load({ ...filters }); }} className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="flex items-center gap-2 text-lg font-semibold"><TrendingUp size={20} className="text-sky-700" />Phân tích và dự báo lượt khám</h2>
-      <p className="mt-1 text-sm text-slate-500">Theo dõi hoạt động khám ngoại trú, xu hướng và nhu cầu khám trong các tháng tiếp theo.</p>
-      <label className="mt-4 block max-w-md text-xs font-medium text-slate-600">Nguồn dữ liệu
-        <select aria-label="Nguồn dữ liệu phân tích" value={String(filters.demo)} disabled={loading} onChange={(e) => update("demo", e.target.value === "true")} className={inputClass}>
-          <option value="false">Dữ liệu phòng khám</option><option value="true">Dữ liệu mô phỏng để minh họa thuật toán</option>
-        </select>
-      </label>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <label className="text-xs font-medium text-slate-600">Từ ngày<input aria-label="Phân tích từ ngày" required type="date" value={filters.fromDate} max={filters.toDate} disabled={loading} onChange={(e) => update("fromDate", e.target.value)} className={inputClass} /></label>
-        <label className="text-xs font-medium text-slate-600">Đến ngày<input aria-label="Phân tích đến ngày" required type="date" value={filters.toDate} min={filters.fromDate} max={dateText(new Date())} disabled={loading} onChange={(e) => update("toDate", e.target.value)} className={inputClass} /></label>
-        <label className="text-xs font-medium text-slate-600">Dự báo tiếp theo (tháng)<input required type="number" min="1" max="12" value={filters.horizon} disabled={loading} onChange={(e) => update("horizon", Number(e.target.value))} className={inputClass} /></label>
-        <label className="text-xs font-medium text-slate-600">Số tháng cuối để kiểm tra<input required type="number" min="1" max="12" value={filters.testMonths} disabled={loading} onChange={(e) => update("testMonths", Number(e.target.value))} className={inputClass} /></label>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button disabled={loading || exporting} className="inline-flex h-10 items-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50">{loading && <Loader2 size={16} className="animate-spin" />}Phân tích dữ liệu</button>
-        {["csv", "json"].map((format) => <button key={format} type="button" disabled={!report || !canExport || exporting || loading} onClick={() => download(format)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"><Download size={15} />Xuất {format.toUpperCase()}</button>)}
-      </div>
+  const future = forecast?.available ? forecast.future : [];
+  const next = future[0];
+  const ranked = report?.rankedHours || [];
+  const peak = ranked.filter((row) => row.rank === 1);
+  const displayed = allMonths ? months : months.slice(-12);
+  const labels = [...displayed.map((row) => row.month), ...future.map((row) => row.month)];
+  const requiredMonths = forecast?.requiredMonths ?? 24 + (usedFilters?.testMonths || 6);
+  const isExample = report?.dataKind === "synthetic" || report?.demoCount > 0;
+  const views = [["monthly", "Theo tháng"], ["rankedHours", "Theo giờ"], ["specialties", "Chuyên khoa"], ["doctors", "Bác sĩ"], ["diseaseGroups", "Nhóm bệnh"]];
+  const viewTitles = { monthly: "Số lượt khám theo tháng", rankedHours: "Giờ đông bệnh nhân", specialties: "Lượt khám theo chuyên khoa", doctors: "Lượt khám theo bác sĩ", diseaseGroups: "Lượt khám theo nhóm bệnh" };
+  return <div className="visit-report" aria-busy={loading}>
+    <form className="vr-filters" onSubmit={(event) => { event.preventDefault(); refresh(); }}>
+      <label>Từ ngày<input aria-label="Từ ngày" type="date" required value={filters.fromDate} max={filters.toDate} onChange={(event) => update("fromDate", event.target.value)} /></label>
+      <label>Đến ngày<input aria-label="Đến ngày" type="date" required value={filters.toDate} min={filters.fromDate} max={dateText(new Date())} onChange={(event) => update("toDate", event.target.value)} /></label>
+      <label>Dự kiến trong<select aria-label="Dự kiến trong" value={filters.horizon} onChange={(event) => update("horizon", Number(event.target.value))}>
+        {[1, 3, 6, 12].map((value) => <option key={value} value={value}>{value} tháng tiếp theo</option>)}
+      </select></label>
+      <button className="vr-primary" disabled={loading || exporting} type="submit">{loading ? "Đang tải…" : "Tải lại"}</button>
+      <button className="vr-secondary" disabled={!report || !canExport || exporting || loading || !!filterProblem(filters)} type="button" onClick={() => download("monthly")}>{exporting ? "Đang tải…" : "Tải bảng tháng"}</button>
     </form>
-    {error && <div role="alert" className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><AlertCircle size={18} className="shrink-0" />{error}</div>}
-    {loading && <p role="status" className="flex items-center gap-2 py-8 text-sm text-slate-600"><Loader2 size={18} className="animate-spin" />Đang tổng hợp dữ liệu lượt khám…</p>}
+    {error && <p role="alert" className="vr-error">{error}</p>}
+    {loading && <div role="status" className={report ? "vr-refreshing" : "vr-loading"}>{report ? "Đang cập nhật số lượt khám…" : "Đang tổng hợp số lượt khám…"}</div>}
     {report && <>
-      {report.dataKind === "synthetic" && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900">ĐANG XEM DỮ LIỆU MÔ PHỎNG. Số lượt và sai số chỉ minh họa thuật toán, không phản ánh hoạt động thật. Dữ liệu này không được ghi vào cơ sở dữ liệu phòng khám.</p>}
-      <p className="text-xs text-slate-500">Kết quả từ {report.from} đến {report.to}. Các thay đổi bộ lọc được áp dụng khi bấm “Phân tích dữ liệu”.</p>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[["Lượt khám hợp lệ", number(report.validCount, 0)], ["Lượt hủy đã loại", number(report.excludedCancelled, 0)], ["Tháng dùng phân tích", report.monthly.length], ["Khung giờ nhiều lượt nhất", peak ? `${peak.label} (${peak.count} lượt)` : "Chưa có dữ liệu"]].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold text-slate-900">{value}</p></div>)}
+      <div className="vr-period"><span>Tổng trong kỳ: <strong>{count(report.validCount)} lượt khám</strong></span>
+        {isExample && <span className="vr-example">Số liệu minh họa</span>}
       </div>
-      {!report.validCount && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Không có lượt khám hợp lệ trong khoảng đã chọn. Hãy kiểm tra khoảng thời gian và dữ liệu nguồn.</p>}
-      <article className="rounded-xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-4 font-semibold">Lượt khám thực tế, xu hướng và dự báo theo tháng</h3>
-        <SeriesChart labels={labels} title="Lượt khám thực tế, đường hồi quy, dự báo kiểm tra và dự báo tiếp theo" series={[
-          { name: "Thực tế", color: "#0369a1", values: labels.map((m) => actualByMonth.get(m) ?? null) },
-          { name: "Hồi quy tuyến tính", color: "#7c3aed", dashed: true, values: labels.map((m) => trendByMonth.get(m) ?? null) },
-          { name: "Dự báo tập kiểm tra", color: "#d97706", values: labels.map((m) => validationByMonth.get(m) ?? null) },
-          { name: "Dự báo tiếp theo", color: "#059669", dashed: true, values: labels.map((m) => futureByMonth.get(m) ?? null) }
-        ]} />
-        {report.trend ? <p className="mt-3 text-sm text-slate-600">Xu hướng: <strong>{report.trend.direction}</strong> · Thay đổi trung bình {number(report.trend.slope)} lượt/tháng · R² = {number(report.trend.rSquared, 4)}. Đường hồi quy mô tả toàn bộ chuỗi, không dùng để tính sai số Holt-Winters.</p> : <p className="text-sm text-slate-500">Cần ít nhất 2 tháng đầy đủ để tính hồi quy tuyến tính.</p>}
-      </article>
-      <article className="rounded-xl border border-slate-200 bg-white p-5">
-        <h3 className="font-semibold">Dự báo Holt-Winters và đánh giá</h3>
-        <p className={`mt-2 text-sm ${forecast.available ? "text-slate-600" : "text-amber-800"}`}>{forecast.message}</p>
-        {forecast.available && <>
-          <p className="mt-3 text-sm text-slate-600">Huấn luyện: {forecast.trainFrom} → {forecast.trainTo} ({forecast.trainCount} tháng). Kiểm tra: {forecast.testFrom} → {forecast.testTo} ({forecast.testCount} tháng).</p>
-          <p className="mt-1 text-xs text-slate-500">Mùa vụ: {forecast.seasonLength} tháng · α = {forecast.parameters.alpha} · β = {forecast.parameters.beta} · γ = {forecast.parameters.gamma} · Mô hình cộng; dự báo âm được giới hạn về 0.</p>
-          <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-left text-xs text-slate-500"><tr><th className="p-3">Mô hình</th><th className="p-3 text-right">MAE (lượt)</th><th className="p-3 text-right">RMSE (lượt)</th><th className="p-3 text-right">MAPE (%)</th></tr></thead><tbody>
-            {[["Holt-Winters", forecast.metrics], ["Mốc so sánh: cùng tháng năm trước", forecast.baselineMetrics]].map(([name, metrics]) => <tr key={name} className="border-t border-slate-100"><td className="p-3">{name}</td><td className="p-3 text-right tabular-nums">{number(metrics.mae)}</td><td className="p-3 text-right tabular-nums">{number(metrics.rmse)}</td><td className="p-3 text-right tabular-nums">{number(metrics.mape)}</td></tr>)}
-          </tbody></table></div>
-          <p className="mt-2 text-xs text-slate-500">Sai số càng nhỏ càng tốt. MAPE dùng {forecast.metrics.mapeCount}/{forecast.testCount} tháng có lượt khám khác 0; {forecast.metrics.zeroActualCount} tháng bằng 0 được loại riêng khỏi MAPE, vẫn tính MAE và RMSE.</p>
-          {forecast.metrics.rmse > forecast.baselineMetrics.rmse && <p className="mt-2 text-sm text-amber-800">Holt-Winters có RMSE cao hơn mốc so sánh trong lần kiểm tra này. Cần xem lại chất lượng dữ liệu và tính phù hợp của mùa vụ.</p>}
-          <div className="mt-5 grid gap-5 xl:grid-cols-2">
-            <div className="overflow-x-auto"><h4 className="mb-2 text-sm font-semibold">Đối chiếu tập kiểm tra</h4><table className="w-full text-sm"><thead className="text-xs text-slate-500"><tr><th className="p-2 text-left">Tháng</th><th className="p-2 text-right">Thực tế</th><th className="p-2 text-right">Dự báo</th><th className="p-2 text-right">Sai lệch</th></tr></thead><tbody>{forecast.validation.map((r) => <tr key={r.month} className="border-t border-slate-100"><td className="p-2">{r.month}</td><td className="p-2 text-right">{number(r.actual, 0)}</td><td className="p-2 text-right">{number(r.predicted)}</td><td className="p-2 text-right">{number(r.predicted - r.actual)}</td></tr>)}</tbody></table></div>
-            <div><h4 className="mb-2 text-sm font-semibold">Các tháng tiếp theo</h4><table className="w-full text-sm"><thead className="text-xs text-slate-500"><tr><th className="p-2 text-left">Tháng</th><th className="p-2 text-right">Lượt khám dự kiến</th></tr></thead><tbody>{forecast.future.map((r) => <tr key={r.month} className="border-t border-slate-100"><td className="p-2">{r.month}</td><td className="p-2 text-right">{number(r.predicted)}</td></tr>)}</tbody></table><p className="mt-2 text-xs text-slate-500">Các tháng tiếp theo tính từ cuối khoảng dữ liệu đã chọn; khi chọn khoảng cũ, đây có thể là các tháng đã qua.</p></div>
+      <div className="vr-metrics">
+        <article><p>{last ? `Tháng ${monthName(last.month)}` : "Tháng gần nhất"}</p><strong>{last ? count(last.count) : "—"}<small>{last ? " lượt" : ""}</small></strong>
+          {change != null ? <span className="vr-change">{percent != null && <b className={change !== 0 ? "vr-blue" : ""}>{percent > 0 ? "+" : ""}{count(percent, 1)}%</b>}<span>{change === 0 ? "Không đổi so với tháng trước" : `${change > 0 ? "Tăng" : "Giảm"} ${count(Math.abs(change))} lượt so với ${monthName(previous.month)}`}</span></span> : <span>{last ? "Chưa có tháng trước để so sánh" : "Chưa có tháng trọn vẹn"}</span>}</article>
+        <article className="vr-next"><p>{next ? `Dự kiến tháng ${monthName(next.month)}` : "Dự kiến tháng tiếp theo"}</p><strong>{next ? count(Math.round(next.predicted)) : "—"}<small>{next ? " lượt" : ""}</small></strong></article>
+        <article><p>Giờ đông nhất</p><strong className="vr-hour">{peak.length === 1 ? peak[0].label : peak.length ? `${peak.length} khung giờ` : "—"}</strong><span>{peak.length > 1 ? peak.map((row) => row.label).join(", ") : peak.length ? `${count(peak[0].count)} lượt trong kỳ` : "Chưa có số liệu theo giờ."}</span></article>
+      </div>
+      {!report.validCount && <p className="vr-notice">Không có lượt khám trong khoảng này. Bạn hãy chọn khoảng thời gian khác.</p>}
+      <div className="vr-main-grid">
+        <section className="vr-panel">
+          <div className="vr-views" role="group" aria-label="Xem lượt khám">
+            {views.map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)}>{label}</button>)}
           </div>
-        </>}
-      </article>
-      <div className="grid gap-5 xl:grid-cols-2">
-        <CountTable title="Phân bố theo khung giờ" rows={report.hourly} />
-        <CountTable title="Lượt khám theo bác sĩ" rows={report.doctors} />
-        <CountTable title="Lượt khám theo chuyên khoa" rows={report.specialties} />
-        <CountTable title="Nhóm bệnh theo mã ICD (3 ký tự)" rows={report.diseaseGroups} />
+          <div className="vr-panel-head"><h2>{viewTitles[view]}</h2>
+            {view === "monthly" && months.length > 12 && <div className="vr-segment" aria-label="Khoảng hiển thị biểu đồ">
+              <button type="button" aria-pressed={!allMonths} onClick={() => setAllMonths(false)}>12 tháng gần nhất</button>
+              <button type="button" aria-pressed={allMonths} onClick={() => setAllMonths(true)}>Toàn bộ</button>
+            </div>}
+          </div>
+          {view === "monthly" ? <SeriesChart labels={labels} futureStart={future.length ? displayed.length : undefined} title="Số lượt khám đã ghi nhận và dự kiến" series={[
+            { name: "Đã ghi nhận", color: "#2563eb", values: [...displayed.map((row) => row.count), ...future.map(() => null)] },
+            ...(future.length ? [{ name: "Dự kiến", color: "#0f766e", dashed: true, connectFrom: displayed.length ? { index: displayed.length - 1, value: last.count } : undefined, values: [...displayed.map(() => null), ...future.map((row) => row.predicted)] }] : [])
+          ]} /> : <CountList key={view} rows={report[view] || []} empty={view === "rankedHours" ? "Chưa có số liệu theo giờ." : "Chưa có số liệu."} />}
+        </section>
+        <section className="vr-panel vr-future"><h2>Lượt khám dự kiến</h2>
+          {future.length ? <div className="vr-future-scroll"><table aria-label="Số lượt dự kiến theo tháng"><thead><tr><th>Tháng</th><th>Số lượt</th></tr></thead><tbody>{future.map((row) => <tr key={row.month}>
+            <td>{monthName(row.month)}</td><td><strong>{count(Math.round(row.predicted))}</strong></td>
+          </tr>)}</tbody></table></div> : <p className="vr-empty">Hiện có {months.length} tháng đầy đủ. Cần tối thiểu {requiredMonths} tháng để ước tính các tháng tiếp theo.</p>}
+        </section>
       </div>
-      <details className="rounded-xl border border-slate-200 bg-white p-5"><summary className="cursor-pointer text-sm font-semibold">Dữ liệu lượt khám theo ngày và tháng</summary>
-        <div className="mt-4 grid gap-5 md:grid-cols-2"><CountTable title="Theo ngày" rows={report.daily.map((x) => ({ label: x.date, count: x.count }))} /><CountTable title="Tháng đầy đủ dùng phân tích" rows={report.monthly.map((x) => ({ label: x.month, count: x.count }))} /></div>
-      </details>
-      <details className="rounded-xl border border-slate-200 bg-white p-5" open={report.demoCount > 0}><summary className="cursor-pointer text-sm font-semibold">Nguồn dữ liệu và cách tính</summary>
-        <p className="mt-3 text-sm text-slate-600">Đọc {number(report.rawCount, 0)} lượt trong khoảng chọn; loại {number(report.excludedInvalid, 0)} lượt không hợp lệ ngoài các lượt hủy. Có {number(report.demoCount, 0)} lượt được nhận diện là dữ liệu demo.</p>
-        {report.excludedReceptionOnly > 0 && <p className="mt-2 text-sm text-slate-600">Trong số lượt đã loại có {number(report.excludedReceptionOnly, 0)} lượt nền tiếp đón chưa phân phòng hoặc bác sĩ; các lượt này không được đếm thêm vào lượt khám.</p>}
-        {report.undatedCount > 0 && <p className="mt-2 text-sm text-amber-800">Toàn bộ cơ sở dữ liệu còn {number(report.undatedCount, 0)} lượt thiếu cả thời gian khám và thời điểm tạo, chưa thể đưa vào khoảng thống kê.</p>}
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">{report.notes.map((note) => <li key={note}>{note}</li>)}</ul>
-      </details>
     </>}
+    <div className="vr-details">
+      {report && <>
+      <Disclosure title="Bảng số liệu theo tháng"><div className="vr-table-scroll"><table aria-label="Số lượt khám theo tháng"><thead><tr><th>Tháng</th><th>Số lượt</th></tr></thead><tbody>{months.map((row) => <tr key={row.month}><td>{monthName(row.month)}</td><td>{count(row.count)}</td></tr>)}</tbody></table></div></Disclosure>
+      {forecast?.available && <Disclosure title="Đối chiếu dự kiến">
+        <p className="vr-muted">Đối chiếu trên {forecast.testCount} tháng gần nhất, từ {monthName(forecast.testFrom)} đến {monthName(forecast.testTo)}.</p>
+        <p>Chênh lệch trung bình khoảng <strong>{count(forecast.metrics.mae, 1)} lượt mỗi tháng</strong>.</p>
+        <SeriesChart labels={forecast.validation.map((row) => row.month)} title="Chênh lệch giữa số đã ghi nhận và số dự kiến" zeroLine valueDigits={1} series={[{ name: "Chênh lệch", color: "#d97706", values: forecast.validation.map((row) => row.residual ?? row.actual - row.predicted) }]} />
+        <p className="vr-muted">Trên mốc 0: số đến khám nhiều hơn dự kiến. Dưới mốc 0: số đến khám ít hơn dự kiến.</p>
+        <div className="vr-table-scroll"><table aria-label="So sánh số lượt theo tháng"><thead><tr><th>Tháng</th><th>Đã ghi nhận</th><th>Đã dự kiến</th><th>Chênh lệch</th></tr></thead><tbody>{forecast.validation.map((row) => <tr key={row.month}><td>{monthName(row.month)}</td><td>{count(row.actual)}</td><td>{count(row.predicted, 1)}</td><td>{count(row.residual ?? row.actual - row.predicted, 1)}</td></tr>)}</tbody></table></div>
+      </Disclosure>}
+      <Disclosure title="Về số liệu và cách tính">
+        <p>{isExample ? `Báo cáo có ${count(report.demoCount)} lượt khám minh họa. Các kết quả này dùng để trình diễn, không phản ánh hoạt động thực tế của phòng khám.` : "Số liệu được tổng hợp từ các lượt khám của phòng khám."}</p>
+        <p className="vr-muted">Đã bỏ {count(report.excludedCancelled)} lượt bị hủy và {count(report.excludedInvalid)} lượt chưa đủ thông tin. Các tháng chưa kết thúc không được dùng để ước tính.</p>
+        {forecast?.available && <div className="vr-method">
+          <h3>Chi tiết dành cho báo cáo đề tài</h3>
+          <p>Holt-Winters · Chu kỳ {forecast.seasonLength} tháng · α = {forecast.parameters.alpha}, β = {forecast.parameters.beta}, γ = {forecast.parameters.gamma}.</p>
+          <p>Dùng {forecast.trainCount} tháng xây dựng dự kiến và {forecast.testCount} tháng đối chiếu.</p>
+          {report.trend && <p>Hồi quy tuyến tính: y = {count(report.trend.intercept, 2)} {report.trend.slope < 0 ? "−" : "+"} {count(Math.abs(report.trend.slope), 2)} × t; R² = {count(report.trend.rSquared, 4)}.</p>}
+          <table aria-label="Chỉ số đánh giá"><thead><tr><th>Cách ước tính</th><th>MAE</th><th>RMSE</th><th>MAPE (%)</th></tr></thead><tbody>
+            {[["Holt-Winters", forecast.metrics], ["Theo cùng tháng năm trước", forecast.baselineMetrics]].map(([name, metrics]) => <tr key={name}><td>{name}</td><td>{count(metrics.mae, 2)}</td><td>{count(metrics.rmse, 2)}</td><td>{count(metrics.mape, 2)}</td></tr>)}
+          </tbody></table>
+          <p>MAPE dùng {forecast.metrics.mapeCount}/{forecast.testCount} tháng có lượt khám khác 0; những tháng bằng 0 vẫn tính MAE và RMSE.</p>
+          {forecast.metrics.rmse > forecast.baselineMetrics.rmse && <p className="vr-notice">Cách ước tính hiện tại có chênh lệch lớn hơn cách lấy cùng tháng năm trước trong lần đối chiếu này.</p>}
+        </div>}
+        <div className="vr-downloads"><button type="button" className="vr-secondary" disabled={!canExport || exporting || loading || !!filterProblem(filters)} onClick={() => download("csv")}>Tải chi tiết đánh giá</button><button type="button" className="vr-text-button" disabled={!canExport || exporting || loading || !!filterProblem(filters)} onClick={() => download("json")}>Tải toàn bộ số liệu</button></div>
+      </Disclosure>
+      </>}
+    <Disclosure title="Tùy chọn khác">
+      <div className="vr-options"><label>Số liệu sử dụng<select aria-label="Số liệu sử dụng" value={String(filters.demo)} onChange={(event) => update("demo", event.target.value === "true")}><option value="false">Số liệu phòng khám</option><option value="true">Số liệu minh họa</option></select></label>
+        <label>Số tháng dùng để đối chiếu<input aria-label="Số tháng dùng để đối chiếu" type="number" min="1" max="12" value={filters.testMonths} onChange={(event) => update("testMonths", Number(event.target.value))} /></label>
+        <button type="button" className="vr-secondary" disabled={exporting} onClick={loadExample}>Xem ví dụ 36 tháng</button>
+      </div>
+    </Disclosure>
+    </div>
   </div>;
 }

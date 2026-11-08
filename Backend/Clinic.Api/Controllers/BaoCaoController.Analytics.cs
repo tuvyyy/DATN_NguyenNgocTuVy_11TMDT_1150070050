@@ -9,6 +9,7 @@ namespace Clinic.Api.Controllers;
 public partial class BaoCaoController
 {
     [HttpGet("visits")]
+    [ProducesResponseType(typeof(VisitAnalyticsReport), StatusCodes.Status200OK)]
     public async Task<IActionResult> Visits([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate,
         [FromQuery] int horizon = 6, [FromQuery] int testMonths = 6, [FromQuery] bool demo = false, CancellationToken ct = default)
     {
@@ -28,13 +29,25 @@ public partial class BaoCaoController
         if (access.Result != null) return access.Result;
         var range = AnalyticsRange(fromDate, toDate, horizon, testMonths);
         if (range.Error != null) return BadRequest(new { message = range.Error });
-        if (format != "csv" && format != "json") return BadRequest(new { message = "Định dạng xuất phải là csv hoặc json." });
+        if (format != "csv" && format != "json" && format != "monthly") return BadRequest(new { message = "Định dạng xuất không được hỗ trợ." });
         var report = demo ? VisitAnalyticsService.BuildDemo(range.From, range.To, horizon, testMonths)
             : await new VisitAnalyticsService(_db).BuildAsync(range.From, range.To, horizon, testMonths, ct);
-        var filename = $"phan-tich-luot-kham-{(demo ? "MO-PHONG-" : "")}{range.From:yyyyMMdd}-{range.To:yyyyMMdd}";
+        var filename = $"phan-tich-luot-kham-{(demo || report.DemoCount > 0 ? "MO-PHONG-" : "")}{range.From:yyyyMMdd}-{range.To:yyyyMMdd}";
         if (format == "json")
             return File(JsonSerializer.SerializeToUtf8Bytes(report, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }),
                 "application/json; charset=utf-8", filename + ".json");
+        if (format == "monthly")
+        {
+            var csv = new StringBuilder("Tháng,Số lượt đã ghi nhận,Số lượt dự kiến\r\n");
+            if (report.DataKind == "synthetic" || report.DemoCount > 0)
+                csv.AppendLine("Số liệu minh họa,,");
+            foreach (var row in report.Monthly)
+                csv.AppendLine($"{row.Month},{row.Count},");
+            foreach (var row in report.Forecast.Future)
+                csv.AppendLine($"{row.Month},,{Math.Round(row.Predicted, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture)}");
+            return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray(),
+                "text/csv; charset=utf-8", "bang-thang-" + filename + ".csv");
+        }
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(AnalyticsCsv(report))).ToArray(),
             "text/csv; charset=utf-8", filename + ".csv");
     }
@@ -54,20 +67,21 @@ public partial class BaoCaoController
 
     private static string AnalyticsCsv(VisitAnalyticsReport report)
     {
-        var csv = new StringBuilder("section,period,label,actual,trend,predicted\r\n");
+        var csv = new StringBuilder("section,period,label,actual,trend,predicted,residual,absolute_error\r\n");
         string Cell(object? value)
         {
             var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
             if (value is string && text.TrimStart().Length > 0 && "=+-@".Contains(text.TrimStart()[0])) text = "'" + text;
             return "\"" + text.Replace("\"", "\"\"") + "\"";
         }
-        void Row(params object?[] cells) => csv.AppendLine(string.Join(",", cells.Select(Cell)));
+        void Row(params object?[] cells) => csv.AppendLine(string.Join(",", Enumerable.Range(0, 8).Select(i => Cell(i < cells.Length ? cells[i] : null))));
         Row("metadata", "", "source", report.Source, null, null);
         Row("metadata", "", "dataKind", report.DataKind, null, null);
         Row("metadata", "", "generatedAt", report.GeneratedAt.ToString("O"), null, null);
         Row("metadata", "", "from", report.From, null, null);
         Row("metadata", "", "to", report.To, null, null);
         Row("metadata", "", "validCount", report.ValidCount, null, null);
+        Row("metadata", "", "rawCount", report.RawCount, null, null);
         Row("metadata", "", "excludedCancelled", report.ExcludedCancelled, null, null);
         Row("metadata", "", "excludedInvalid", report.ExcludedInvalid, null, null);
         Row("metadata", "", "excludedReceptionOnly", report.ExcludedReceptionOnly, null, null);
@@ -76,6 +90,12 @@ public partial class BaoCaoController
         Row("metadata", "", "seasonLength", report.Forecast.SeasonLength, null, null);
         Row("metadata", "", "trainCount", report.Forecast.TrainCount, null, null);
         Row("metadata", "", "testCount", report.Forecast.TestCount, null, null);
+        Row("metadata", "", "requiredMonths", report.Forecast.RequiredMonths, null, null);
+        Row("metadata", "", "trainFrom", report.Forecast.TrainFrom, null, null);
+        Row("metadata", "", "trainTo", report.Forecast.TrainTo, null, null);
+        Row("metadata", "", "testFrom", report.Forecast.TestFrom, null, null);
+        Row("metadata", "", "testTo", report.Forecast.TestTo, null, null);
+        Row("metadata", "", "residualDefinition", "actual - predicted", null, null);
         Row("metadata", "", "forecastMessage", report.Forecast.Message, null, null);
         if (report.Trend != null)
         {
@@ -104,11 +124,16 @@ public partial class BaoCaoController
             report.Trend?.Points.FirstOrDefault(t => t.Month == x.Month)?.Value, null);
         foreach (var x in report.Forecast.Validation)
         {
-            Row("test", x.Month, "Holt-Winters", x.Actual, null, x.Predicted);
-            Row("test", x.Month, "Seasonal naive", x.Actual, null, x.SeasonalNaive);
+            Row("test", x.Month, "Holt-Winters", x.Actual, null, x.Predicted, x.Residual, x.AbsoluteError);
+            Row("test", x.Month, "Seasonal naive", x.Actual, null, x.SeasonalNaive, x.SeasonalNaiveResidual, Math.Abs(x.SeasonalNaiveResidual));
         }
         foreach (var x in report.Forecast.Future) Row("forecast", x.Month, "Holt-Winters", null, null, x.Predicted);
         foreach (var x in report.Daily) Row("daily", x.Date, "Lượt khám", x.Count, null, null);
+        foreach (var x in report.RankedHours)
+        {
+            Row("hourly_rank", x.Label, "rank", x.Rank, null, null);
+            Row("hourly_rank", x.Label, "share_percent", x.SharePercent, null, null);
+        }
         foreach (var (name, rows) in new[] { ("hourly", report.Hourly), ("doctors", report.Doctors), ("specialties", report.Specialties), ("disease_groups", report.DiseaseGroups) })
             foreach (var x in rows) Row(name, "", x.Label, x.Count, null, null);
         foreach (var note in report.Notes) Row("note", "", note, null, null, null);

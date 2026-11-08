@@ -1,12 +1,19 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Settings, Shield, Users } from "lucide-react";
+import { Activity, BarChart3, Settings, Shield, Users } from "lucide-react";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
   const cards = [
+    {
+      title: "Báo cáo hoạt động",
+      icon: <BarChart3 size={40} className="text-cyan-600" />,
+      desc: "Xem số lượt khám, giờ đông bệnh nhân và số lượt dự kiến sắp tới.",
+      path: "/admin/bao-cao",
+      glow: "hover:shadow-[0_0_25px_3px_rgba(6,182,212,0.25)]",
+    },
     {
       title: "Quản lý người dùng",
       icon: <Users size={40} className="text-sky-600" />,
@@ -49,7 +56,7 @@ export default function AdminDashboard() {
       <div className="mb-8 text-center">
         <h1 className="app-heading text-3xl">Admin Dashboard</h1>
         <p className="app-subtext mt-2">
-          Điều hành người dùng, phân quyền và toàn bộ danh mục trong hệ thống tiuv clinic.
+          Điều hành người dùng, phân quyền, danh mục và theo dõi báo cáo trong hệ thống tiuv clinic.
         </p>
       </div>
 

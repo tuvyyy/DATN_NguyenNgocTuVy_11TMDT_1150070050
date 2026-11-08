@@ -520,10 +520,12 @@ public class ServiceRegistrationV2Controller : ControllerBase
             }
         }
 
-        var requirePaymentBeforeQueue = req.ForceRequirePayment
-            ?? _configuration.GetValue<bool>("Reception:RequirePaymentBeforeQueue", false);
-        var allowQueueBeforePayment = req.AllowQueueBeforePayment
-            ?? _configuration.GetValue<bool>("Reception:AllowQueueBeforePayment", false);
+        // Requests can tighten the payment policy, but cannot bypass the server's rule.
+        // The default outpatient workflow collects the examination fee before queueing.
+        var requirePaymentBeforeQueue = _configuration.GetValue<bool>("Reception:RequirePaymentBeforeQueue", true)
+            || req.ForceRequirePayment == true;
+        var allowQueueBeforePayment = _configuration.GetValue<bool>("Reception:AllowQueueBeforePayment", false)
+            && req.AllowQueueBeforePayment != false;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 

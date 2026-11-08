@@ -153,11 +153,7 @@ namespace Clinic.Api.Controllers
             if (!actorId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản thu ngân đang đăng nhập." });
 
-            var hd = await _db.HoaDons.FirstOrDefaultAsync(x => x.Id == id);
-            if (hd == null)
-                return NotFound("Không tìm thấy hóa đơn.");
-
-            return await ConfirmPaymentCoreAsync(hd, actorId.Value, null);
+            return await ConfirmPaymentCoreAsync(id, actorId.Value, null);
         }
 
         // ✅ Xác nhận thanh toán bằng MÃ HÓA ĐƠN (chuỗi)
@@ -175,17 +171,26 @@ namespace Clinic.Api.Controllers
             if (!actorId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản thu ngân đang đăng nhập." });
 
-            var hd = await _db.HoaDons.FirstOrDefaultAsync(x => x.MaHd == maHd);
-            if (hd == null)
+            var invoiceId = await _db.HoaDons.Where(x => x.MaHd == maHd).Select(x => (long?)x.Id).SingleOrDefaultAsync();
+            if (!invoiceId.HasValue)
                 return NotFound("Không tìm thấy hóa đơn.");
 
-            return await ConfirmPaymentCoreAsync(hd, actorId.Value, req.HinhThucThanhToan);
+            return await ConfirmPaymentCoreAsync(invoiceId.Value, actorId.Value, req.HinhThucThanhToan);
         }
 
-        private async Task<IActionResult> ConfirmPaymentCoreAsync(HoaDon hd, long idThuNgan, string? paymentMethod)
+        private async Task<IActionResult> ConfirmPaymentCoreAsync(long invoiceId, long idThuNgan, string? paymentMethod)
         {
             if (idThuNgan <= 0)
                 return BadRequest("Thiếu idThuNgan hợp lệ.");
+
+            // Hold an update lock through validation, queue creation and commit. A second
+            // payment request must read the committed status before it can proceed.
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            var hd = await _db.HoaDons.FromSqlInterpolated(
+                $"SELECT * FROM dbo.hoa_don WITH (UPDLOCK, ROWLOCK) WHERE id = {invoiceId}")
+                .SingleOrDefaultAsync();
+            if (hd == null)
+                return NotFound("Không tìm thấy hóa đơn.");
 
             if (string.Equals(hd.TrangThai, "DA_THANH_TOAN", StringComparison.OrdinalIgnoreCase))
                 return BadRequest("Hóa đơn này đã được thanh toán rồi.");
@@ -236,7 +241,6 @@ namespace Clinic.Api.Controllers
             }
 
             var now = DateTime.Now;
-            await using var tx = await _db.Database.BeginTransactionAsync();
 
             hd.TrangThai = "DA_THANH_TOAN";
             hd.IdThuNgan = idThuNgan;

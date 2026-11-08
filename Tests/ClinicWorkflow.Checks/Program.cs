@@ -164,14 +164,26 @@ try
     await Request(reception, HttpMethod.Post, "/api/tiepdon/v2/encounters/save", intake, "Lưu lặp hồ sơ có cùng khóa yêu cầu", 200);
     Check(await db.HoSoBenhAns.CountAsync() == 1, "Không tạo trùng hồ sơ đang hoạt động");
     await Request(reception, HttpMethod.Post, "/api/chidinh/v2/service-orders/confirm", new ServiceOrderRequestDto { EncounterId = encounterId, PatientId = patientId, ServiceIds = new() { otherService.Id }, ForceRequirePayment = true }, "Chặn dịch vụ khác khu", 400);
-    var order = new ServiceOrderRequestDto { EncounterId = encounterId, PatientId = patientId, ServiceIds = new() { service.Id }, ForceRequirePayment = true, AllowQueueBeforePayment = false, IdempotencyKey = "order-e2e" };
+    var order = new ServiceOrderRequestDto { EncounterId = encounterId, PatientId = patientId, ServiceIds = new() { service.Id }, ForceRequirePayment = false, AllowQueueBeforePayment = true, IdempotencyKey = "order-e2e" };
     await Request(reception, HttpMethod.Post, "/api/chidinh/v2/service-orders/confirm", order, "Đăng ký dịch vụ và lập hóa đơn khám", 200);
-    Check(!await db.LanKhams.AnyAsync(x => x.IdPhong != null), "Chưa thanh toán thì chưa tạo hàng đợi phòng khám");
+    Check(!await db.LanKhams.AnyAsync(x => x.IdPhong != null), "Không thể sửa yêu cầu để vào hàng đợi trước khi thanh toán");
+    Check(await db.HoaDons.AsNoTracking().AllAsync(x => x.TrangThai == "CHO_THANH_TOAN"),
+        "Quy định thu phí trước được áp dụng mặc định từ máy chủ");
     var examInvoice = await db.HoaDons.AsNoTracking().SingleAsync();
     Check(examInvoice.TongTien == 100000, "Đơn giá khám lấy từ database");
     await Request(reception, HttpMethod.Put, $"/api/HoaDon/xac-nhan-thanh-toan/{examInvoice.Id}", users["cashier_e2e"], "Tiếp đón không thể xác nhận thu tiền", 403);
     await Request(cashier, HttpMethod.Put, $"/api/HoaDon/xac-nhan-thanh-toan/ma/{examInvoice.MaHd}", new { hinhThucThanhToan = "VNPAY" }, "Không cho xác nhận VNPay thủ công thay callback", 400);
-    await Request(cashier, HttpMethod.Put, $"/api/HoaDon/xac-nhan-thanh-toan/{examInvoice.Id}", users["cashier_e2e"], "Thu ngân xác nhận tiền khám", 200);
+    var simultaneousPayments = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ =>
+        cashier.PutAsJsonAsync($"/api/HoaDon/xac-nhan-thanh-toan/{examInvoice.Id}", users["cashier_e2e"])));
+    try
+    {
+        Check(simultaneousPayments.Count(x => x.IsSuccessStatusCode) == 1
+            && simultaneousPayments.Count(x => x.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict) == 1,
+            "Hai yêu cầu thu tiền đồng thời chỉ có một yêu cầu thành công");
+    }
+    finally { foreach (var response in simultaneousPayments) response.Dispose(); }
+    Check(await db.LanKhams.CountAsync(x => x.IdHoSo == encounterId && x.IdPhong == room.Id) == 1,
+        "Thanh toán đồng thời chỉ tạo một lượt vào hàng đợi");
     await Request(cashier, HttpMethod.Put, $"/api/HoaDon/xac-nhan-thanh-toan/{examInvoice.Id}", users["cashier_e2e"], "Chặn thanh toán hóa đơn hai lần", 400);
     var visit = await db.LanKhams.AsNoTracking().SingleAsync(x => x.IdPhong == room.Id);
     Check(visit.IdSinhHieu.HasValue, "Lượt vào phòng khám giữ liên kết sinh hiệu tiếp đón");
@@ -216,6 +228,35 @@ try
     await db.NguoiDungVaiTros.Where(x => x.IdNguoiDung == users["doctor2_e2e"]).ExecuteDeleteAsync();
     await Request(doctor2, HttpMethod.Get, "/api/LanKham/cho-kham", null, "Vai trò đã thu hồi bị chặn dù JWT chưa hết hạn", 403);
     Check(true, "Hoàn tất luồng tiếp đón → thu ngân → bác sĩ → cận lâm sàng → đơn thuốc → thanh toán");
+    var historySql = await File.ReadAllTextAsync(Path.Combine(root, "Database/04_SeedVisitHistory.sql"));
+    async Task SeedHistory()
+    {
+        using var seedConnection = new SqlConnection(options.ConnectionString);
+        await seedConnection.OpenAsync();
+        using var seedCommand = new SqlCommand(historySql, seedConnection) { CommandTimeout = 180 };
+        await seedCommand.ExecuteNonQueryAsync();
+    }
+    await SeedHistory();
+    var historyVisits = await db.LanKhams.AsNoTracking().CountAsync(x => x.IdHoSoNavigation != null && x.IdHoSoNavigation.MaHs.StartsWith("HS-DEMO-HIST-"));
+    var historyInvoices = await db.HoaDons.AsNoTracking().Where(x => x.MaHd.StartsWith("HD-DEMO-HIST-")).ToListAsync();
+    Check(historyVisits > 10000 && historyInvoices.Count == historyVisits && historyInvoices.All(x => x.TrangThai == "DA_THANH_TOAN" && x.TongTien == 100000),
+        "Lịch sử demo có lượt khám gắn với hóa đơn đã thanh toán tương ứng");
+    Check(await db.HoaDons.Where(x => !x.MaHd.StartsWith("HD-DEMO-HIST-")).SumAsync(x => x.TongTien) == 152000
+        && await db.Thuocs.Where(x => x.Id == drug.Id).Select(x => x.SoLuongTon).SingleAsync() == 98,
+        "Nạp lịch sử không sửa hóa đơn cũ hoặc tồn thuốc");
+    var historyEnd = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    var historicalReport = await new VisitAnalyticsService(db).BuildAsync(historyEnd.AddMonths(-36), historyEnd.AddDays(-1), 6, 6, default);
+    Check(historicalReport.Monthly.Count == 36 && historicalReport.Monthly.All(x => x.Count > 0)
+        && historicalReport.Forecast.Available && historicalReport.Forecast.TrainCount == 30 && historicalReport.Forecast.TestCount == 6
+        && historicalReport.DemoCount == historyVisits, "Dữ liệu SQL có đủ 36 tháng, được nhận diện demo và chạy Holt-Winters trực tiếp");
+    Check(await db.LanKhams.CountAsync(x => x.IdHoSoNavigation != null && x.IdHoSoNavigation.MaHs.StartsWith("HS-DEMO-HIST-") && x.ThoiGianBatDau >= historyEnd) == 0,
+        "Lịch sử demo không tạo lượt khám trong tháng hiện tại hoặc tương lai");
+    var patientsAfterSeed = await db.BenhNhans.CountAsync();
+    var visitsAfterSeed = await db.LanKhams.CountAsync();
+    var invoicesAfterSeed = await db.HoaDons.CountAsync();
+    await SeedHistory();
+    Check(await db.BenhNhans.CountAsync() == patientsAfterSeed && await db.LanKhams.CountAsync() == visitsAfterSeed
+        && await db.HoaDons.CountAsync() == invoicesAfterSeed, "Chạy lại bộ nạp lịch sử không tạo trùng bệnh nhân, lượt khám hoặc hóa đơn");
 }
 catch (Exception ex)
 {

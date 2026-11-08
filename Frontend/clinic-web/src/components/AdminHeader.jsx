@@ -6,6 +6,7 @@ const menus = [
   ["/admin", "Bảng điều hành"], ["/admin/users", "Người dùng"], ["/admin/roles", "Vai trò"],
   ["/admin/danh-muc-dv", "Dịch vụ"], ["/admin/danh-muc-thuoc", "Thuốc"],
   ["/admin/danh-muc-dvkt", "DVKT"], ["/admin/logs", "Vận hành"], ["/admin/system", "Cấu hình"],
+  ["/admin/bao-cao", "Báo cáo"],
 ];
 
 export default function AdminHeader() {

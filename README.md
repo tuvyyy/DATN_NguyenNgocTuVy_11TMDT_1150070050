@@ -88,6 +88,8 @@ Hệ thống kiểm soát trạng thái hồ sơ và quyền thao tác trong t�
 │   ├── 01_Schema.sql
 │   ├── 02_SeedBase.sql
 │   ├── 03_CreateAdmin.ps1
+│   ├── 04_SeedVisitHistory.sql    # Lịch sử khám demo 36 tháng
+│   ├── Seed-DemoHistory.ps1      # Nạp lịch sử demo vào database đã cấu hình
 │   ├── Export-Schema.ps1
 │   └── SqlScripts/               # Các script cập nhật theo từng phần
 ├── Tests/
@@ -147,6 +149,14 @@ Script sẽ yêu cầu nhập mật khẩu có ít nhất 8 ký tự và sử d�
 
 Bộ SQL chỉ chứa cấu trúc và cấu hình nền. Để chạy đầy đủ một ca khám, cần bổ sung danh mục thuốc, dịch vụ, giá, phòng khám, tài khoản nhân viên và các phân công tương ứng. Các script trong `Database/SqlScripts/` là bản cập nhật từng phần; đọc nội dung và kiểm tra database trước khi áp dụng.
 
+Sau khi đã có tài khoản tiếp đón, thu ngân, bác sĩ được phân phòng, dịch vụ theo phòng, khu/quầy và danh mục bệnh, có thể nạp lịch sử demo để kiểm tra báo cáo trực tiếp từ SQL Server:
+
+```powershell
+.\Database\Seed-DemoHistory.ps1
+```
+
+Lệnh đọc chuỗi kết nối từ cấu hình backend, thêm lịch sử 36 tháng đã kết thúc với bệnh nhân mang mã `DEMO-HIST-`, hồ sơ `HS-DEMO-HIST-` và hóa đơn `HD-DEMO-HIST-`. Dữ liệu gồm hồ sơ đã đóng, lượt khám đã hoàn tất, dịch vụ khám và hóa đơn giả lập đã thanh toán; đơn giá demo là 100.000 đồng/lượt. Script chạy trong transaction, không cập nhật bản ghi có sẵn, không thay đổi tồn thuốc và có thể chạy lại mà không tạo trùng. Đây là dữ liệu trình diễn, không phải người bệnh hoặc doanh thu thật.
+
 ### 4. Cấu hình kết nối
 
 Thêm mục `ConnectionStrings` vào [appsettings.Development.json](Backend/Clinic.Api/appsettings.Development.json), giữ lại các cấu hình khác đang có. Ví dụ dùng SQL Server Express với Windows Authentication:
@@ -204,7 +214,7 @@ Frontend hiện khai báo địa chỉ API local trong mã nguồn, chủ yếu 
 
 ## Thống kê và dự báo lượt khám
 
-Đăng nhập bằng tài khoản quản trị (`ADMIN`), vào **Báo cáo → Phân tích và dự báo lượt khám**.
+Đăng nhập bằng tài khoản quản trị (`ADMIN`), vào **Báo cáo** tại `/admin/bao-cao`. Trang mở mặc định phần **Lượt khám và dự kiến** trong bố cục quản trị; đổi thời gian hoặc số tháng dự kiến sẽ tự cập nhật số liệu.
 
 - Thống kê lượt khám theo ngày/tháng, giờ, bác sĩ, chuyên khoa và nhóm mã ICD.
 - Phân tích xu hướng bằng hồi quy tuyến tính.
@@ -212,6 +222,8 @@ Frontend hiện khai báo địa chỉ API local trong mã nguồn, chủ yếu 
 - Hỗ trợ nguồn dữ liệu phòng khám và nguồn mô phỏng được ghi nhãn riêng.
 
 Dự báo cần ít nhất 24 tháng huấn luyện cộng với số tháng kiểm tra đã chọn; mặc định cần 30 tháng đầy đủ. Khi lịch sử chưa đủ, có thể chọn dữ liệu mô phỏng để xem luồng phân tích. Nguồn mô phỏng không ghi thêm lượt khám vào database.
+
+Nếu đã nạp bộ lịch sử demo, giữ nguồn **Số liệu phòng khám** để thống kê và dự báo trực tiếp từ database. Giao diện đánh dấu **Số liệu minh họa** khi báo cáo có lượt demo. Các mục **Đối chiếu dự kiến** và **Về số liệu và cách tính** chứa biểu đồ sai lệch, phương trình hồi quy, khoảng huấn luyện/kiểm tra, tham số Holt-Winters và các chỉ số đánh giá.
 
 ## Build và kiểm thử
 
@@ -248,7 +260,7 @@ dotnet run --project .\Tests\ClinicWorkflow.Checks\ClinicWorkflow.Checks.csproj
 
 Bộ kiểm thử này chạy trên Windows, kết nối instance `.\SQLEXPRESS` bằng Windows Authentication. Tài khoản chạy cần quyền tạo và xóa database kiểm thử. Chương trình tạo database riêng có tiền tố `DACN_E2E_`, chạy quy trình với dữ liệu mô phỏng rồi xóa database đó; kết quả được ghi vào `TestResults/`.
 
-Lần kiểm tra sau khi tổ chức lại mã nguồn: **build backend/frontend thành công, 9 kiểm thử frontend, 27 kiểm tra thống kê và 69 kiểm tra quy trình đều đạt**. Mã nguồn hiện vẫn còn một số cảnh báo compiler và lint.
+Lần kiểm tra gần nhất: **27 kiểm thử frontend, 59 kiểm tra thuật toán/API/Swagger và 76 kiểm tra quy trình/bộ nạp lịch sử đều đạt**. Bộ kiểm thử quy trình bao gồm hai yêu cầu thanh toán đồng thời và kiểm tra giao diện không thể bỏ qua quy định thu phí trước. Build backend/frontend thành công; mã nguồn vẫn còn một số cảnh báo compiler và lint.
 
 ## Tệp phát sinh khi sử dụng
 

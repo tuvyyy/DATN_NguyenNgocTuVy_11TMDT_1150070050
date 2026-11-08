@@ -272,8 +272,9 @@ namespace Clinic.Api.Controllers
         // POST api/auth/me/{id}/avatar
         // ============================
         [HttpPost("me/{id:long}/avatar")]
+        [Consumes("multipart/form-data")]
         [RequestSizeLimit(5 * 1024 * 1024)]
-        public async Task<IActionResult> UploadAvatar(long id, [FromForm] IFormFile? file)
+        public async Task<IActionResult> UploadAvatar(long id, IFormFile? file)
         {
             if (id <= 0) return BadRequest("Thiếu id.");
             if (file == null || file.Length == 0) return BadRequest("Vui lòng chọn ảnh.");

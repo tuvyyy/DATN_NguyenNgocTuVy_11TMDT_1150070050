@@ -26,12 +26,12 @@ const getToken = () =>
   sessionStorage.getItem("token") ||
   getTokenFromUserInfo();
 
-const requestWithFallback = async (path, { params, responseType } = {}) => {
+const requestWithFallback = async (path, { params, responseType, signal } = {}) => {
   const token = getToken();
   if (!token) {
     return {
       status: 401,
-      data: { message: "Phien dang nhap da het han. Vui long dang nhap lai." },
+      data: { message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." },
       headers: {},
     };
   }
@@ -42,8 +42,9 @@ const requestWithFallback = async (path, { params, responseType } = {}) => {
       const response = await axios.get(`${base}${path}`, {
         params,
         responseType,
+        signal,
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 30000,
+        timeout: responseType === "blob" ? 30000 : 15000,
         validateStatus: () => true,
       });
 
@@ -58,11 +59,15 @@ const requestWithFallback = async (path, { params, responseType } = {}) => {
 
       return response;
     } catch (err) {
+      if (signal?.aborted || axios.isCancel(err)) throw err;
+      if (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT") {
+        throw new Error("Tải báo cáo quá lâu. Bạn hãy thử lại.");
+      }
       lastError = err;
     }
   }
 
-  throw lastError;
+  throw new Error("Không kết nối được máy chủ báo cáo. Bạn hãy thử lại.", { cause: lastError });
 };
 
 export const getReportOptions = async () => {
@@ -94,8 +99,8 @@ export const exportReportCsv = async ({ type, fromDate, toDate }) => {
   return response;
 };
 
-export const getVisitAnalytics = async (params) => {
-  const response = await requestWithFallback("/api/bao-cao/visits", { params });
+export const getVisitAnalytics = async (params, { signal } = {}) => {
+  const response = await requestWithFallback("/api/bao-cao/visits", { params, signal });
   if (response.status >= 400) throw new Error(response.data?.message || "Không tải được phân tích lượt khám.");
   return response.data;
 };

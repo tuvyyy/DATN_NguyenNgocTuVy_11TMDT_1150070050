@@ -5,7 +5,13 @@ public record TrendPoint(string Month, double Value);
 public record VisitTrend(double Intercept, double Slope, double RSquared, string Direction, List<TrendPoint> Points);
 public record ForecastParameters(double Alpha, double Beta, double Gamma);
 public record ForecastPoint(string Month, double Predicted);
-public record ValidationPoint(string Month, int Actual, double Predicted, double SeasonalNaive);
+public record ValidationPoint(string Month, int Actual, double Predicted, double SeasonalNaive)
+{
+    // Positive residuals mean that demand was underestimated.
+    public double Residual => Actual - Predicted;
+    public double AbsoluteError => Math.Abs(Residual);
+    public double SeasonalNaiveResidual => Actual - SeasonalNaive;
+}
 public record ForecastErrors(double Mae, double Rmse, double? Mape, int MapeCount, int ZeroActualCount);
 public record VisitForecast
 {
@@ -16,6 +22,7 @@ public record VisitForecast
     public int Horizon { get; init; }
     public int TrainCount { get; init; }
     public int TestCount { get; init; }
+    public int RequiredMonths { get; init; }
     public string? TrainFrom { get; init; }
     public string? TrainTo { get; init; }
     public string? TestFrom { get; init; }
@@ -76,6 +83,7 @@ public static class VisitForecasting
             return new()
             {
                 Horizon = horizon, TrainCount = trainCount, TestCount = Math.Min(testMonths, months.Count),
+                RequiredMonths = 2 * SeasonLength + testMonths,
                 Message = $"Chưa đủ dữ liệu: có {months.Count} tháng đầy đủ; cần ít nhất {2 * SeasonLength + testMonths} tháng "
                     + $"(24 tháng huấn luyện và {testMonths} tháng kiểm tra). Không tạo dự báo khi thiếu lịch sử."
             };
@@ -109,6 +117,7 @@ public static class VisitForecasting
         return new()
         {
             Available = true, Horizon = horizon, TrainCount = trainCount, TestCount = testMonths,
+            RequiredMonths = 2 * SeasonLength + testMonths,
             TrainFrom = months[0].Month, TrainTo = months[trainCount - 1].Month,
             TestFrom = months[trainCount].Month, TestTo = months[^1].Month, Parameters = best,
             Metrics = Errors(actual, predictions), BaselineMetrics = Errors(actual, validation.Select(x => x.SeasonalNaive).ToArray()),

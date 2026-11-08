@@ -14,6 +14,7 @@ export default function AdminLayout() {
     "/admin/danh-muc-thuoc",
     "/admin/danh-muc-dvkt",
     "/admin/logs",
+    "/admin/bao-cao",
   ];
   const isFixedWorkspace = fixedWorkspacePaths.includes(location.pathname);
 

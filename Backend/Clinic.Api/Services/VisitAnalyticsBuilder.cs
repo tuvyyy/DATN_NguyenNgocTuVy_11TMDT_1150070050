@@ -3,6 +3,7 @@ namespace Clinic.Api.Services;
 public record VisitObservation(long Id, long? PatientId, DateTime? At, string? Status, string? RecordStatus,
     string? Doctor, string? Specialty, string? DiseaseCode, bool IsDemo, long? DoctorId = null, bool IsRegistrationPlaceholder = false);
 public record VisitCount(string Label, int Count);
+public record RankedVisitHour(int Rank, string Label, int Count, double SharePercent);
 public record DailyVisit(string Date, int Count);
 public record VisitAnalyticsReport
 {
@@ -22,6 +23,7 @@ public record VisitAnalyticsReport
     public List<DailyVisit> Daily { get; init; } = new();
     public List<MonthlyVisit> Monthly { get; init; } = new();
     public List<VisitCount> Hourly { get; init; } = new();
+    public List<RankedVisitHour> RankedHours { get; init; } = new();
     public List<VisitCount> Doctors { get; init; } = new();
     public List<VisitCount> Specialties { get; init; } = new();
     public List<VisitCount> DiseaseGroups { get; init; } = new();
@@ -80,6 +82,14 @@ public static class VisitAnalyticsBuilder
             "Nhóm bệnh dùng 3 ký tự đầu mã ICD; lượt có nhiều chẩn đoán chỉ tính bệnh chính. Chuyên khoa lấy từ phòng khám, sau đó từ bác sĩ."
         };
         var demoCount = valid.Count(x => x.IsDemo);
+        var hourly = Enumerable.Range(0, 24)
+            .Select(h => new VisitCount($"{h:00}:00–{h:00}:59", valid.Count(x => x.At!.Value.Hour == h))).ToList();
+        var rankedHours = new List<RankedVisitHour>();
+        foreach (var hour in hourly.Where(x => x.Count > 0).OrderByDescending(x => x.Count).ThenBy(x => x.Label, StringComparer.Ordinal))
+        {
+            var rank = rankedHours.Count > 0 && rankedHours[^1].Count == hour.Count ? rankedHours[^1].Rank : rankedHours.Count + 1;
+            rankedHours.Add(new(rank, hour.Label, hour.Count, 100.0 * hour.Count / valid.Count));
+        }
         if (demoCount > 0) notes.Add($"Có {demoCount} lượt mang mã dữ liệu demo. Sai số trên dữ liệu này chỉ phục vụ thực nghiệm, không chứng minh chất lượng trên dữ liệu vận hành thật.");
         if (valid.Any(x => x.At!.Value.TimeOfDay == TimeSpan.Zero)) notes.Add("Một số lượt có thời điểm 00:00; cần kiểm tra giờ thực tế trước khi kết luận về khung giờ cao điểm.");
         if (monthly.Count > 0 && monthly.All(x => x.Count == monthly[0].Count)) notes.Add("Chuỗi tháng không biến động; kết quả dự báo có thể đơn giản và không thể hiện mùa vụ.");
@@ -90,7 +100,7 @@ public static class VisitAnalyticsBuilder
             ExcludedInvalid = nonCancelled.Count - valid.Count, DemoCount = demoCount, Notes = notes,
             ExcludedReceptionOnly = nonCancelled.Count(x => x.IsRegistrationPlaceholder),
             Daily = daily, Monthly = monthly,
-            Hourly = Enumerable.Range(0, 24).Select(h => new VisitCount($"{h:00}:00–{h:00}:59", valid.Count(x => x.At!.Value.Hour == h))).ToList(),
+            Hourly = hourly, RankedHours = rankedHours,
             Doctors = Group(x => x.DoctorId.HasValue ? $"{x.Doctor ?? "Chưa xác định"} (#{x.DoctorId})" : x.Doctor), Specialties = Group(x => x.Specialty),
             DiseaseGroups = Group(x => string.IsNullOrWhiteSpace(x.DiseaseCode) ? null : x.DiseaseCode.Trim().ToUpperInvariant()[..Math.Min(3, x.DiseaseCode.Trim().Length)]),
             Trend = VisitForecasting.LinearTrend(monthly), Forecast = VisitForecasting.Forecast(monthly, horizon, testMonths)

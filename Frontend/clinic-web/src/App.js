@@ -41,6 +41,7 @@ import DanhMucDichVu from "./pages/admin/dvkt/DanhMucDichVu.jsx";
 import ThuocPage from "./pages/admin/thuoc/index.jsx";
 import DanhMucDVKT from "./pages/admin/danhmucdvkt/index.jsx";
 import OperationsCenterPage from "./pages/admin/OperationsCenterPage.jsx";
+import AdminReportsPage from "./pages/admin/AdminReportsPage.jsx";
 import { usePermission } from "./hooks/UsePermission";
 
 
@@ -121,7 +122,7 @@ export default function App() {
           path="/bao-cao"
           element={<RequireFeatureView user={currentUser} feature="BAO_CAO" />}
         >
-          <Route index element={<BaoCao />} />
+          <Route index element={<BaoCao isAdmin={currentUser?.roles?.includes("ADMIN")} />} />
         </Route>
 
         {/* ===================== BÁC SĨ ===================== */}
@@ -170,6 +171,9 @@ export default function App() {
             <Route path="users" element={<AdminUserPage />} />
             <Route path="roles" element={<AdminPermissionPage />} />
             <Route path="logs" element={<OperationsCenterPage />} />
+            <Route element={<RequireFeatureView user={currentUser} feature="BAO_CAO" />}>
+              <Route path="bao-cao" element={<AdminReportsPage />} />
+            </Route>
             <Route path="system" element={<div>Trang cấu hình hệ thống</div>} />
 
             {/* ✅ Danh mục DVKT */}
