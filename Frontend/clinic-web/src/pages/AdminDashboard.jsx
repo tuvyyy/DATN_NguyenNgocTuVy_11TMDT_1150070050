@@ -1,84 +1,49 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Activity, BarChart3, Settings, Shield, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Activity, ArrowRight, BarChart3, ClipboardList, Pill, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import "./AdminDashboard.css";
+
+const people = [
+  { path: "/admin/users", title: "Người dùng", text: "Tài khoản và thông tin nhân viên", icon: Users },
+  { path: "/admin/roles", title: "Vai trò & phân quyền", text: "Quyền truy cập theo công việc", icon: ShieldCheck },
+];
+const catalogs = [
+  { path: "/admin/danh-muc-dv", title: "Dịch vụ khám", text: "Nhóm dịch vụ và bảng giá", icon: Stethoscope },
+  { path: "/admin/danh-muc-thuoc", title: "Thuốc", text: "Danh mục thuốc và giá bán", icon: Pill },
+  { path: "/admin/danh-muc-dvkt", title: "Kỹ thuật cận lâm sàng", text: "Kỹ thuật, nhóm và bảng giá", icon: ClipboardList },
+];
+
+function WorkGroup({ title, description, items }) {
+  return <section className="ao-group">
+    <header><h2>{title}</h2><p>{description}</p></header>
+    <div className="ao-work-list">{items.map(({ path, title: label, text, icon: Icon }) =>
+      <Link className="ao-work-item" key={path} to={path}>
+        <span className="ao-work-icon"><Icon size={20} aria-hidden="true" /></span>
+        <span><strong>{label}</strong><small>{text}</small></span>
+        <ArrowRight size={16} className="ao-item-arrow" aria-hidden="true" />
+      </Link>)}
+    </div>
+  </section>;
+}
 
 export default function AdminDashboard() {
-  const navigate = useNavigate();
-
-  const cards = [
-    {
-      title: "Báo cáo hoạt động",
-      icon: <BarChart3 size={40} className="text-cyan-600" />,
-      desc: "Xem số lượt khám, giờ đông bệnh nhân và số lượt dự kiến sắp tới.",
-      path: "/admin/bao-cao",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(6,182,212,0.25)]",
-    },
-    {
-      title: "Quản lý người dùng",
-      icon: <Users size={40} className="text-sky-600" />,
-      desc: "Tạo, sửa, khóa, mở khóa và phân quyền người dùng hệ thống.",
-      path: "/admin/users",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(56,189,248,0.3)]",
-    },
-    {
-      title: "Vai trò & phân quyền",
-      icon: <Shield size={40} className="text-pink-500" />,
-      desc: "Quản lý vai trò, quyền hạn và kiểm soát truy cập chức năng.",
-      path: "/admin/roles",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(244,114,182,0.3)]",
-    },
-    {
-      title: "Danh mục dịch vụ",
-      icon: <Activity size={40} className="text-emerald-500" />,
-      desc: "Quản lý nhóm dịch vụ, dịch vụ và bảng giá khám.",
-      path: "/admin/danh-muc-dv",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(16,185,129,0.25)]",
-    },
-    {
-      title: "Danh mục thuốc",
-      icon: <Settings size={40} className="text-indigo-500" />,
-      desc: "Quản lý nhóm thuốc, thuốc và bảng giá thuốc.",
-      path: "/admin/danh-muc-thuoc",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(99,102,241,0.25)]",
-    },
-    {
-      title: "Danh mục DVKT",
-      icon: <Settings size={40} className="text-violet-500" />,
-      desc: "Quản lý nhóm DVKT, kỹ thuật và bảng giá kỹ thuật.",
-      path: "/admin/danh-muc-dvkt",
-      glow: "hover:shadow-[0_0_25px_3px_rgba(139,92,246,0.28)]",
-    },
-  ];
-
-  return (
-    <div className="min-h-[80vh] flex flex-col items-center px-4 pb-16 pt-14">
-      <div className="mb-8 text-center">
-        <h1 className="app-heading text-3xl">Admin Dashboard</h1>
-        <p className="app-subtext mt-2">
-          Điều hành người dùng, phân quyền, danh mục và theo dõi báo cáo trong hệ thống tiuv clinic.
-        </p>
-      </div>
-
-      <div className="grid w-full max-w-6xl grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card) => (
-          <motion.div
-            key={card.path}
-            className={`app-card app-card-hover relative cursor-pointer rounded-2xl p-6 transition-all duration-300 ${card.glow}`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(card.path)}
-          >
-            <div className="flex flex-col items-start gap-3">
-              {card.icon}
-              <h2 className="text-lg font-semibold text-sky-800">{card.title}</h2>
-              <p className="text-sm leading-snug text-slate-600">{card.desc}</p>
-            </div>
-
-            <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-t from-white/40 to-transparent opacity-0 transition-opacity duration-300 hover:opacity-100" />
-          </motion.div>
-        ))}
-      </div>
+  return <div className="admin-overview">
+    <header className="ao-heading"><span>TIUV CLINIC / QUẢN TRỊ</span><h1>Tổng quan</h1><p>Chọn nhóm công việc để bắt đầu.</p></header>
+    <section className="ao-priority" aria-label="Báo cáo và vận hành">
+      <Link className="ao-report-card" to="/admin/bao-cao">
+        <span className="ao-feature-icon"><BarChart3 size={27} aria-hidden="true" /></span>
+        <div><span className="ao-category">BÁO CÁO & PHÂN TÍCH</span><h2>Lượt khám & dự báo</h2><p>Theo dõi lượt khám và dự kiến nhu cầu sắp tới.</p></div>
+        <span className="ao-card-action">Xem báo cáo<ArrowRight size={16} aria-hidden="true" /></span>
+      </Link>
+      <Link className="ao-operations-card" to="/admin/logs">
+        <span className="ao-feature-icon"><Activity size={24} aria-hidden="true" /></span>
+        <div><span className="ao-category">VẬN HÀNH</span><h2>Theo dõi hệ thống</h2><p>Thông báo, yêu cầu hỗ trợ và nhật ký thao tác.</p></div>
+        <ArrowRight size={19} className="ao-operations-arrow" aria-hidden="true" />
+      </Link>
+    </section>
+    <div className="ao-work-groups">
+      <WorkGroup title="Nhân sự & quyền truy cập" description="Quản lý ai được sử dụng hệ thống." items={people} />
+      <WorkGroup title="Danh mục phòng khám" description="Cập nhật dữ liệu dùng trong các nghiệp vụ." items={catalogs} />
     </div>
-  );
+  </div>;
 }

@@ -214,7 +214,7 @@ Frontend hiện khai báo địa chỉ API local trong mã nguồn, chủ yếu 
 
 ## Thống kê và dự báo lượt khám
 
-Đăng nhập bằng tài khoản quản trị (`ADMIN`), vào **Báo cáo** tại `/admin/bao-cao`. Trang mở mặc định phần **Lượt khám và dự kiến** trong bố cục quản trị; đổi thời gian hoặc số tháng dự kiến sẽ tự cập nhật số liệu.
+Đăng nhập bằng tài khoản quản trị (`ADMIN`), vào **Báo cáo** tại `/admin/bao-cao`. Chọn **Lượt khám và dự báo**. Thiết lập dữ liệu ở cột trái, bấm **Cập nhật báo cáo** để áp dụng; xem kết quả và xuất dữ liệu ở vùng bên phải. Thay đổi chưa áp dụng được ghi rõ và chưa thay thế kết quả đang xem.
 
 - Thống kê lượt khám theo ngày/tháng, giờ, bác sĩ, chuyên khoa và nhóm mã ICD.
 - Phân tích xu hướng bằng hồi quy tuyến tính.
@@ -223,7 +223,11 @@ Frontend hiện khai báo địa chỉ API local trong mã nguồn, chủ yếu 
 
 Dự báo cần ít nhất 24 tháng huấn luyện cộng với số tháng kiểm tra đã chọn; mặc định cần 30 tháng đầy đủ. Khi lịch sử chưa đủ, có thể chọn dữ liệu mô phỏng để xem luồng phân tích. Nguồn mô phỏng không ghi thêm lượt khám vào database.
 
-Nếu đã nạp bộ lịch sử demo, giữ nguồn **Số liệu phòng khám** để thống kê và dự báo trực tiếp từ database. Giao diện đánh dấu **Số liệu minh họa** khi báo cáo có lượt demo. Các mục **Đối chiếu dự kiến** và **Về số liệu và cách tính** chứa biểu đồ sai lệch, phương trình hồi quy, khoảng huấn luyện/kiểm tra, tham số Holt-Winters và các chỉ số đánh giá.
+Nếu đã nạp bộ lịch sử demo, giữ nguồn **Phòng khám** để thống kê và dự báo trực tiếp từ database. Giao diện đánh dấu **Dữ liệu minh họa** khi có lượt demo hoặc sử dụng nguồn mô phỏng.
+
+- **Dự báo lượt khám** hiển thị lịch sử theo tháng, xu hướng tuyến tính và dự báo. Bảng dự báo từng tháng ghi rõ khoảng lượt ứng với từng mức màu.
+- **Đánh giá mô hình** hiển thị kỳ huấn luyện và kiểm tra, MAE/RMSE/MAPE, đối chiếu với cùng kỳ năm trước và nút tải kết quả đánh giá.
+- **Phân tích lượt khám** có biểu đồ từng ngày với bộ chọn tháng và phân bố theo giờ, chuyên khoa, bác sĩ, nhóm bệnh.
 
 ## Build và kiểm thử
 

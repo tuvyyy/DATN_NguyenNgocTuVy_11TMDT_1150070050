@@ -18,6 +18,7 @@ import MainLayout from "../layouts/MainLayout";
 import { exportReportCsv, getReportOptions, getReportSummary } from "../api/BaoCaoApi";
 import { usePermission } from "../hooks/UsePermission";
 import VisitAnalytics from "./reports/VisitAnalytics";
+import SelectField from "../components/ui/SelectField";
 
 const REPORT_LABELS = {
   reception: "Báo cáo lượt tiếp đón",
@@ -25,7 +26,7 @@ const REPORT_LABELS = {
   doctor: "Báo cáo hoạt động bác sĩ",
   lab: "Báo cáo thực hiện cận lâm sàng",
   "admin-summary": "Báo cáo tổng hợp quản trị",
-  "visit-analytics": "Lượt khám và dự kiến",
+  "visit-analytics": "Lượt khám và dự báo",
 };
 
 const SUMMARY_LABELS = {
@@ -294,7 +295,7 @@ export function ReportWorkspace({ defaultType = "", title = "Báo cáo & Thống
 
   if (permission.loading || loading) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center bg-slate-50 p-6 animate-fadeIn">
+      <div className="flex h-full w-full flex-col items-center justify-center bg-slate-50 p-6">
         <div className="flex h-[320px] w-full max-w-md flex-col items-center justify-center bg-white gap-3 rounded-2xl border border-slate-200 shadow-2xs">
           <Loader2 size={32} className="animate-spin text-[#0077B6]" />
           <p className="text-sm text-slate-500">Đang tải báo cáo…</p>
@@ -305,7 +306,7 @@ export function ReportWorkspace({ defaultType = "", title = "Báo cáo & Thống
 
   if (!permission.canView) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-start bg-slate-50 p-6 animate-fadeIn">
+      <div className="flex h-full w-full flex-col items-center justify-start bg-slate-50 p-6">
         <div className="mx-auto max-w-md mt-16 p-6 rounded-2xl border border-rose-200 bg-white text-center shadow-2xs">
           <AlertCircle size={36} className="mx-auto text-rose-500 mb-3" />
           <h2 className="text-base font-extrabold text-slate-800">Không có quyền truy cập</h2>
@@ -318,34 +319,21 @@ export function ReportWorkspace({ defaultType = "", title = "Báo cáo & Thống
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 text-slate-800 animate-fadeIn">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 text-slate-800">
       {/* Executive Header Toolbar */}
-      <header className="shrink-0 border-b border-slate-200/80 bg-white px-4 py-3 shadow-2xs">
+      <header className={type === "visit-analytics" ? "report-workspace-bar" : "shrink-0 border-b border-slate-200/80 bg-white px-4 py-3 shadow-2xs"}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <h1 className={`${type === "visit-analytics" ? "text-sm font-semibold text-slate-500" : "text-xl font-extrabold text-slate-900"} tracking-tight flex items-center gap-2`}>
               <BarChart3 size={22} className="text-[#0077B6]" />
               {title}
             </h1>
           </div>
 
           {/* Module Selector (Combobox for test accessibility & quick switcher) */}
-          <div className="flex items-center gap-3 w-full md:w-auto md:min-w-[280px]">
-            <label htmlFor="report-type" className="sr-only">
-              Xem báo cáo
-            </label>
-            <select
-              id="report-type"
-              value={type}
-              onChange={(event) => setType(event.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 cursor-pointer"
-            >
-              {reports.map((report) => (
-                <option key={report.type} value={report.type}>
-                  {REPORT_LABELS[report.type] || report.label || report.type}
-                </option>
-              ))}
-            </select>
+          <div className="report-type-control w-full md:w-auto md:min-w-[240px]">
+            <SelectField label="Xem báo cáo" hideLabel value={type} onChange={setType}
+              options={reports.map(report => ({ value: report.type, label: REPORT_LABELS[report.type] || report.label || report.type }))} />
           </div>
         </div>
 
@@ -399,7 +387,7 @@ export function ReportWorkspace({ defaultType = "", title = "Báo cáo & Thống
       </header>
 
       {/* Main Workspace Body */}
-      <section className={`min-h-0 flex-1 overflow-y-auto bg-slate-50/60 ${type === "visit-analytics" ? "p-4 space-y-3" : "p-6 space-y-6"}`}>
+      <section className={type === "visit-analytics" ? "report-analytics-host" : "min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-6 space-y-6"}>
         {error && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-bold text-rose-800 flex items-start gap-3 shadow-2xs">
             <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-600" />

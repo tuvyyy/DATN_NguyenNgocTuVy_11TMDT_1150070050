@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminLayout from "../../layouts/AdminLayout";
 import BaoCao from "../BaoCao";
 import AdminReportsPage from "./AdminReportsPage";
@@ -18,9 +18,7 @@ jest.mock("react-router-dom", () => {
     Outlet: () => React.createElement(require("./AdminReportsPage").default),
   };
 }, { virtual: true });
-jest.mock("framer-motion", () => ({ AnimatePresence: ({ children }) => children }));
 jest.mock("lucide-react", () => new Proxy({}, { get: (_, key) => key === "__esModule" ? true : () => null }), { virtual: true });
-jest.mock("../../components/PageTransition", () => ({ children }) => children);
 jest.mock("../../components/AdminFooter", () => () => null);
 jest.mock("../../layouts/MainLayout", () => {
   const React = require("react");
@@ -48,7 +46,7 @@ test("admin report keeps the admin menu and opens analytics without a staff layo
   expect(screen.getByRole("link", { name: "Báo cáo" }).getAttribute("href")).toBe("/admin/bao-cao");
   await screen.findByText("analytics-content");
   expect(screen.getByRole("heading", { name: "Báo cáo hoạt động" })).not.toBeNull();
-  expect(screen.getByRole("combobox").value).toBe("visit-analytics");
+  expect(screen.getByRole("combobox").textContent).toBe("Lượt khám và dự báo");
   expect(screen.queryByTestId("staff-layout")).toBeNull();
   expect(getReportSummary).not.toHaveBeenCalled();
 });
@@ -69,7 +67,7 @@ test("staff reports keep their layout and cannot select an unavailable admin rep
   render(<BaoCao />);
   await screen.findByRole("heading", { name: "Báo cáo & Thống kê nghiệp vụ" });
   expect(screen.getByTestId("staff-layout")).not.toBeNull();
-  expect(screen.getByRole("combobox").value).toBe("reception");
+  expect(screen.getByRole("combobox").textContent).toBe("Báo cáo lượt tiếp đón");
   expect(screen.queryByText("analytics-content")).toBeNull();
   await waitFor(() => expect(getReportSummary).toHaveBeenCalledWith({ type: "reception", fromDate: "2024-01-01", toDate: "2024-12-31" }));
 });
@@ -80,4 +78,27 @@ test("permission denial inside the admin report does not mount a staff layout or
   await screen.findByRole("heading", { name: "Không có quyền truy cập" });
   expect(screen.queryByTestId("staff-layout")).toBeNull();
   expect(getReportOptions).not.toHaveBeenCalled();
+});
+
+test("admin navigation groups working catalogs and removes the unused configuration link", async () => {
+  render(<AdminLayout />);
+  await screen.findByText("analytics-content");
+  expect(screen.getByRole("link", { name: "Báo cáo" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.queryByRole("link", { name: "Cấu hình" })).toBeNull();
+  const group = screen.getByText("Danh mục").closest("details");
+  expect(group.open).toBe(false);
+  fireEvent.click(screen.getByText("Danh mục"));
+  expect(group.open).toBe(true);
+  expect(screen.getByRole("link", { name: "Thuốc" }).getAttribute("href")).toBe("/admin/danh-muc-thuoc");
+  fireEvent.keyDown(screen.getByText("Danh mục"), { key: "Escape" });
+  expect(group.open).toBe(false);
+});
+
+test("custom report selector switches to another permitted report", async () => {
+  render(<AdminReportsPage />);
+  await screen.findByText("analytics-content");
+  fireEvent.click(screen.getByRole("combobox", { name: "Xem báo cáo" }));
+  fireEvent.click(screen.getByRole("option", { name: "Báo cáo lượt tiếp đón" }));
+  await waitFor(() => expect(getReportSummary).toHaveBeenCalledWith({ type: "reception", fromDate: "2024-01-01", toDate: "2024-12-31" }));
+  expect(screen.queryByText("analytics-content")).toBeNull();
 });
