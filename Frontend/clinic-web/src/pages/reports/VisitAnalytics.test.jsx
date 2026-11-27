@@ -11,7 +11,9 @@ const report = {
   monthly: [{ month: "2024-11", count: 8 }, { month: "2024-12", count: 10 }],
   daily: [], hourly: [{ label: "09:00–09:59", count: 18 }], doctors: [], specialties: [], diseaseGroups: [], notes: [],
   rankedHours: [{ rank: 1, label: "09:00–09:59", count: 18, sharePercent: 100 }],
-  trend: { intercept: 8, slope: 2, rSquared: 1, direction: "Tăng", points: [] },
+  trend: { intercept: 8, slope: 2, rSquared: 1, direction: "Tăng", points: [
+    { month: "2024-11", value: 8 }, { month: "2024-12", value: 10 },
+  ] },
   forecast: { available: false, requiredMonths: 30, message: "Internal technical message", validation: [], future: [] },
 };
 const predictedReport = () => ({ ...report, forecast: {
@@ -43,8 +45,12 @@ test("overview answers practical questions and keeps mathematical details out of
   expect(screen.getByText("Dự kiến tháng 01/2025")).not.toBeNull();
   const futureTable = screen.getByRole("table", { name: "Số lượt dự kiến theo tháng" });
   expect(within(futureTable).getAllByRole("row")[1].textContent).toBe("01/202513");
-  const chart = screen.getByRole("img", { name: "Số lượt khám đã ghi nhận và dự kiến" });
-  expect(chart.querySelectorAll("path").length).toBe(2);
+  const chart = screen.getByRole("img", { name: "Biểu đồ lượt khám theo tháng" });
+  expect(chart.querySelectorAll("path")).toHaveLength(3);
+  expect(screen.getByText("Xu hướng tuyến tính:", { selector: ".vr-chart-readout span" }).textContent).toContain("10 lượt");
+  fireEvent.focus(within(chart).getByLabelText("01/2025, Dự kiến: 13 lượt"));
+  expect(screen.getByText("Dự kiến:", { selector: ".vr-chart-readout span" }).textContent).toContain("13 lượt");
+  expect(screen.queryByText("Xu hướng tuyến tính:", { selector: ".vr-chart-readout span" })).toBeNull();
   expect(screen.queryByText(/Holt-Winters|Hồi quy|RMSE|MAPE|database|train|test/i)).toBeNull();
   expect(screen.queryByText("Internal technical message")).toBeNull();
   expect(screen.queryByRole("table", { name: "So sánh số lượt theo tháng" })).toBeNull();
@@ -54,6 +60,8 @@ test("overview answers practical questions and keeps mathematical details out of
 test("insufficient history uses readable guidance without presenting made-up future values", async () => {
   render(<VisitAnalytics canExport />);
   await screen.findByText(/Hiện có 2 tháng đầy đủ/);
+  expect(screen.getByText("Xu hướng tuyến tính")).not.toBeNull();
+  expect(screen.getByRole("img", { name: "Biểu đồ lượt khám theo tháng" }).querySelectorAll("path")).toHaveLength(2);
   expect(screen.queryByRole("table", { name: "Số lượt dự kiến theo tháng" })).toBeNull();
   expect(getVisitAnalytics.mock.calls[0][0].demo).toBe(false);
 });
@@ -145,8 +153,61 @@ test("the shared report panel switches breakdowns without reloading or hiding fu
   fireEvent.click(screen.getByRole("button", { name: "Xem đủ 6 mục" }));
   expect(screen.getByText("Bác sĩ 6")).not.toBeNull();
   fireEvent.click(within(switcher).getByRole("button", { name: "Theo tháng" }));
-  expect(screen.getByRole("img", { name: "Số lượt khám đã ghi nhận và dự kiến" })).not.toBeNull();
+  expect(screen.getByRole("img", { name: "Biểu đồ lượt khám theo tháng" })).not.toBeNull();
   expect(screen.queryByRole("list")).toBeNull();
+  expect(getVisitAnalytics).toHaveBeenCalledTimes(1);
+});
+
+test("the trend stays aligned to its months when the chart shows only the latest year", async () => {
+  const historicalMonths = [
+    { month: "2023-12", count: 30 },
+    ...Array.from({ length: 12 }, (_, i) => ({ month: `2024-${String(i + 1).padStart(2, "0")}`, count: i + 40 })),
+  ];
+  getVisitAnalytics.mockResolvedValue({
+    ...predictedReport(),
+    monthly: historicalMonths,
+    trend: {
+      ...report.trend,
+      points: historicalMonths.map(({ month }, i) => ({ month, value: 30.25 + i })),
+    },
+  });
+  render(<VisitAnalytics canExport />);
+  const chart = await screen.findByRole("img", { name: "Biểu đồ lượt khám theo tháng" });
+
+  fireEvent.focus(within(chart).getByLabelText("01/2024, Đã ghi nhận: 40 lượt"));
+  expect(screen.getByText("Xu hướng tuyến tính:", { selector: ".vr-chart-readout span" }).textContent).toContain("31,25 lượt");
+  expect(within(chart).queryByLabelText("12/2023, Đã ghi nhận: 30 lượt")).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Toàn bộ" }));
+  fireEvent.focus(within(chart).getByLabelText("12/2023, Đã ghi nhận: 30 lượt"));
+  expect(screen.getByText("Xu hướng tuyến tính:", { selector: ".vr-chart-readout span" }).textContent).toContain("30,25 lượt");
+  expect(getVisitAnalytics).toHaveBeenCalledTimes(1);
+});
+
+test("daily view keeps zero-count days and lets users choose any month in the loaded range", async () => {
+  getVisitAnalytics.mockResolvedValue({
+    ...predictedReport(),
+    daily: [
+      { date: "2024-11-30", count: 3 },
+      { date: "2024-12-01", count: 0 },
+      { date: "2024-12-02", count: 7 },
+    ],
+  });
+  render(<VisitAnalytics canExport />);
+  await screen.findByRole("heading", { name: "Số lượt khám theo tháng" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Theo ngày" }));
+  const chart = screen.getByRole("img", { name: "Biểu đồ lượt khám theo ngày" });
+  const month = screen.getByRole("combobox", { name: "Tháng hiển thị" });
+  expect(month.value).toBe("2024-12");
+  fireEvent.focus(within(chart).getByLabelText("01/12/2024, Đã ghi nhận: 0 lượt"));
+  expect(screen.getByText("Đã ghi nhận:", { selector: ".vr-chart-readout span" }).textContent).toContain("0 lượt");
+  expect(within(chart).queryByLabelText("30/11/2024, Đã ghi nhận: 3 lượt")).toBeNull();
+
+  fireEvent.change(month, { target: { value: "2024-11" } });
+  expect(within(chart).getByLabelText("30/11/2024, Đã ghi nhận: 3 lượt")).not.toBeNull();
+  expect(within(chart).queryByLabelText("02/12/2024, Đã ghi nhận: 7 lượt")).toBeNull();
+  expect(screen.getByRole("table", { name: "Số lượt dự kiến theo tháng" })).not.toBeNull();
   expect(getVisitAnalytics).toHaveBeenCalledTimes(1);
 });
 
@@ -185,6 +246,9 @@ test("empty reports do not invent a busiest hour", async () => {
   render(<VisitAnalytics canExport />);
   await screen.findByText("Chưa có số liệu theo giờ.");
   expect(screen.queryByRole("img", { name: "Chênh lệch giữa số đã ghi nhận và số dự kiến" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Theo ngày" }));
+  expect(screen.getByText("Chưa có số liệu theo ngày.")).not.toBeNull();
+  expect(screen.queryByRole("img", { name: "Biểu đồ lượt khám theo ngày" })).toBeNull();
 });
 
 test("database sample records are labelled honestly without exposing database terminology", async () => {

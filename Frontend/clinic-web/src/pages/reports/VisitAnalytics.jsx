@@ -4,6 +4,8 @@ import "./VisitAnalytics.css";
 
 const count = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toLocaleString("vi-VN", { maximumFractionDigits: digits });
 const monthName = (value) => /^\d{4}-\d{2}$/.test(value || "") ? `${value.slice(5)}/${value.slice(0, 4)}` : value || "—";
+const dayName = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value.split("-").reverse().join("/") : value || "—";
+const chartDashes = { dotted: "2 5", dashed: "7 5" };
 const dateText = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const initialFilters = () => {
   const now = new Date();
@@ -31,17 +33,25 @@ function Disclosure({ title, children }) {
   </section>;
 }
 
-export function SeriesChart({ labels, series, title, zeroLine = false, valueDigits = 0, futureStart }) {
+export function SeriesChart({
+  labels, series, title, zeroLine = false, valueDigits = 0, futureStart,
+  formatLabel = monthName, emptyMessage = "Chưa có số liệu theo tháng.",
+}) {
   const [selected, setSelected] = useState(null);
   const signature = labels.join(",");
   useEffect(() => setSelected(null), [signature]);
-  if (!labels.length) return <p className="vr-empty">Chưa có số liệu theo tháng.</p>;
+  if (!labels.length) return <p className="vr-empty">{emptyMessage}</p>;
   const values = series.flatMap((item) => item.values.filter(Number.isFinite));
   const low = Math.min(0, ...values);
   const high = Math.max(1, ...values);
   const span = high - low || 1;
-  const x = (i) => 65 + i * 820 / Math.max(1, labels.length - 1);
+  const x = (i) => labels.length === 1 ? 475 : 65 + i * 820 / (labels.length - 1);
   const y = (v) => 270 - (v - low) / span * 225;
+  const xTickCount = Math.min(7, labels.length);
+  const xTicks = Array.from({ length: xTickCount }, (_, i) => Math.round(i * (labels.length - 1) / Math.max(1, xTickCount - 1)));
+  const yIntervals = valueDigits ? 4 : Math.min(4, Math.floor(span));
+  const forecastBoundary = futureStart > 0 && futureStart < labels.length
+    ? (x(futureStart - 1) + x(futureStart)) / 2 : null;
   const active = selected != null && selected < labels.length ? selected : Math.max(0, (futureStart ?? labels.length) - 1);
   const path = (items, connectFrom) => {
     let connected = false;
@@ -56,38 +66,106 @@ export function SeriesChart({ labels, series, title, zeroLine = false, valueDigi
   };
   return <div className="vr-chart">
     <div className="vr-chart-legend">{series.map((item) => <span key={item.name}>
-      <i style={{ borderColor: item.color, borderTopStyle: item.dashed ? "dashed" : "solid" }} />{item.name}
+      <i style={{ borderColor: item.color, borderTopStyle: item.lineStyle ?? "solid" }} aria-hidden="true" />{item.name}
     </span>)}</div>
     <div className="vr-chart-scroll">
       <svg viewBox="0 0 930 320" role="img" aria-label={title}>
         <title>{title}</title>
         <text x="65" y="20" fontSize="13" fill="#64748b">Lượt khám</text>
-        {futureStart != null && futureStart < labels.length && <g>
-          <rect x={x(futureStart) - 10} y="32" width={895 - x(futureStart)} height="238" fill="#f0fdfa" />
-          <text x={x(futureStart)} y="25" fontSize="13" fill="#0f766e">Dự kiến</text>
+        {forecastBoundary != null && <g>
+          <rect x={forecastBoundary} y="32" width={895 - forecastBoundary} height="238" fill="#f0fdfa" />
+          <text x="895" y="25" textAnchor="end" fontSize="13" fill="#0f766e">Dự kiến</text>
         </g>}
-        {Array.from({ length: 5 }, (_, i) => low + span * i / 4).map((v, i) => <g key={i}>
+        {Array.from({ length: yIntervals + 1 }, (_, i) => low + span * i / yIntervals).map((v, i) => <g key={i}>
           <line x1="65" x2="885" y1={y(v)} y2={y(v)} stroke="#e2e8f0" />
           <text x="54" y={y(v) + 5} textAnchor="end" fontSize="13" fill="#64748b">{count(v, valueDigits)}</text>
         </g>)}
         {zeroLine && <line x1="65" x2="885" y1={y(0)} y2={y(0)} stroke="#64748b" strokeDasharray="5 4"><title>Không chênh lệch</title></line>}
-        {labels.map((label, i) => i % Math.max(1, Math.ceil(labels.length / 7)) === 0 || i === labels.length - 1
-          ? <text key={label} x={x(i)} y="301" textAnchor="middle" fontSize="13" fill="#64748b">{monthName(label)}</text> : null)}
+        {xTicks.map((i) => <text key={labels[i]} x={x(i)} y="301" textAnchor="middle" fontSize="13" fill="#64748b">
+          {formatLabel(labels[i])}
+        </text>)}
         {selected != null && selected < labels.length && <line x1={x(selected)} x2={x(selected)} y1="35" y2="270" stroke="#94a3b8" strokeDasharray="4 4" />}
         {series.map((item) => <g key={item.name}>
-          <path d={path(item.values, item.connectFrom)} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={item.dashed ? "7 5" : undefined} />
-          {item.values.map((value, i) => !Number.isFinite(value) ? null : <circle key={i} cx={x(i)} cy={y(value)} r={selected === i ? 6 : 4}
-            fill={item.color} stroke="white" strokeWidth="2" tabIndex="0" aria-label={`${monthName(labels[i])}, ${item.name}: ${count(value, valueDigits)} lượt`}
+          <path d={path(item.values, item.connectFrom)} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={chartDashes[item.lineStyle]} />
+          {item.showPoints !== false && item.values.map((value, i) => !Number.isFinite(value) ? null : <circle key={i} cx={x(i)} cy={y(value)} r={selected === i ? 6 : 4}
+            fill={item.color} stroke="white" strokeWidth="2" tabIndex="0" aria-label={`${formatLabel(labels[i])}, ${item.name}: ${count(value, item.valueDigits ?? valueDigits)} lượt`}
             onMouseEnter={() => setSelected(i)} onFocus={() => setSelected(i)} onClick={() => setSelected(i)}>
-            <title>{`${monthName(labels[i])} · ${item.name}: ${count(value, valueDigits)} lượt`}</title>
+            <title>{`${formatLabel(labels[i])} · ${item.name}: ${count(value, item.valueDigits ?? valueDigits)} lượt`}</title>
           </circle>)}
         </g>)}
       </svg>
     </div>
-    <div className="vr-chart-readout" aria-live="polite"><strong>{monthName(labels[active])}</strong>
-      {series.filter((item) => Number.isFinite(item.values[active])).map((item) => <span key={item.name}>{item.name}: <strong>{count(item.values[active], valueDigits)} lượt</strong></span>)}
+    <div className="vr-chart-readout" aria-live="polite"><strong>{formatLabel(labels[active])}</strong>
+      {series.filter((item) => Number.isFinite(item.values[active])).map((item) => <span key={item.name}>
+        {item.name}: <strong>{count(item.values[active], item.valueDigits ?? valueDigits)} lượt</strong>
+      </span>)}
     </div>
   </div>;
+}
+
+function MonthlyVisitChart({ months, future, trendPoints }) {
+  const monthsWithoutForecast = months.map(() => null);
+  const futureWithoutHistory = future.map(() => null);
+  const trendByMonth = new Map(trendPoints.map(({ month, value }) => [month, value]));
+  const trend = months.map(({ month }) => trendByMonth.get(month));
+  const series = [{
+    name: "Đã ghi nhận",
+    color: "#2563eb",
+    values: [...months.map((row) => row.count), ...futureWithoutHistory],
+  }];
+  if (trend.some(Number.isFinite)) {
+    series.push({
+      name: "Xu hướng tuyến tính",
+      color: "#7c3aed",
+      lineStyle: "dotted",
+      showPoints: false,
+      valueDigits: 2,
+      values: [...trend, ...futureWithoutHistory],
+    });
+  }
+  if (future.length) {
+    series.push({
+      name: "Dự kiến",
+      color: "#0f766e",
+      lineStyle: "dashed",
+      connectFrom: months.length ? { index: months.length - 1, value: months.at(-1).count } : undefined,
+      values: [...monthsWithoutForecast, ...future.map((row) => row.predicted)],
+    });
+  }
+  return <SeriesChart
+    labels={[...months, ...future].map((row) => row.month)}
+    series={series}
+    title="Biểu đồ lượt khám theo tháng"
+    futureStart={future.length ? months.length : undefined}
+  />;
+}
+
+function DailyVisitChart({ days }) {
+  const [selectedMonth, setSelectedMonth] = useState("");
+  // Keep every day in the filter accessible without plotting several years at once.
+  const daysByMonth = new Map();
+  for (const day of days) {
+    const month = day.date.slice(0, 7);
+    if (!daysByMonth.has(month)) daysByMonth.set(month, []);
+    daysByMonth.get(month).push(day);
+  }
+  const months = [...daysByMonth.keys()].reverse();
+  const month = daysByMonth.has(selectedMonth) ? selectedMonth : months[0];
+  const displayedDays = daysByMonth.get(month) ?? [];
+  return <>
+    {months.length > 1 && <label className="vr-day-period">Tháng hiển thị
+      <select value={month} onChange={(event) => setSelectedMonth(event.target.value)}>
+        {months.map((option) => <option key={option} value={option}>{monthName(option)}</option>)}
+      </select>
+    </label>}
+    <SeriesChart
+      labels={displayedDays.map((day) => day.date)}
+      series={[{ name: "Đã ghi nhận", color: "#2563eb", values: displayedDays.map((day) => day.count) }]}
+      title="Biểu đồ lượt khám theo ngày"
+      formatLabel={dayName}
+      emptyMessage="Chưa có số liệu theo ngày."
+    />
+  </>;
 }
 
 function CountList({ rows, empty = "Chưa có số liệu." }) {
@@ -176,11 +254,10 @@ export default function VisitAnalytics({ canExport }) {
   const ranked = report?.rankedHours || [];
   const peak = ranked.filter((row) => row.rank === 1);
   const displayed = allMonths ? months : months.slice(-12);
-  const labels = [...displayed.map((row) => row.month), ...future.map((row) => row.month)];
   const requiredMonths = forecast?.requiredMonths ?? 24 + (usedFilters?.testMonths || 6);
   const isExample = report?.dataKind === "synthetic" || report?.demoCount > 0;
-  const views = [["monthly", "Theo tháng"], ["rankedHours", "Theo giờ"], ["specialties", "Chuyên khoa"], ["doctors", "Bác sĩ"], ["diseaseGroups", "Nhóm bệnh"]];
-  const viewTitles = { monthly: "Số lượt khám theo tháng", rankedHours: "Giờ đông bệnh nhân", specialties: "Lượt khám theo chuyên khoa", doctors: "Lượt khám theo bác sĩ", diseaseGroups: "Lượt khám theo nhóm bệnh" };
+  const views = [["monthly", "Theo tháng"], ["daily", "Theo ngày"], ["rankedHours", "Theo giờ"], ["specialties", "Chuyên khoa"], ["doctors", "Bác sĩ"], ["diseaseGroups", "Nhóm bệnh"]];
+  const viewTitles = { monthly: "Số lượt khám theo tháng", daily: "Số lượt khám theo ngày", rankedHours: "Giờ đông bệnh nhân", specialties: "Lượt khám theo chuyên khoa", doctors: "Lượt khám theo bác sĩ", diseaseGroups: "Lượt khám theo nhóm bệnh" };
   return <div className="visit-report" aria-busy={loading}>
     <form className="vr-filters" onSubmit={(event) => { event.preventDefault(); refresh(); }}>
       <label>Từ ngày<input aria-label="Từ ngày" type="date" required value={filters.fromDate} max={filters.toDate} onChange={(event) => update("fromDate", event.target.value)} /></label>
@@ -215,10 +292,9 @@ export default function VisitAnalytics({ canExport }) {
               <button type="button" aria-pressed={allMonths} onClick={() => setAllMonths(true)}>Toàn bộ</button>
             </div>}
           </div>
-          {view === "monthly" ? <SeriesChart labels={labels} futureStart={future.length ? displayed.length : undefined} title="Số lượt khám đã ghi nhận và dự kiến" series={[
-            { name: "Đã ghi nhận", color: "#2563eb", values: [...displayed.map((row) => row.count), ...future.map(() => null)] },
-            ...(future.length ? [{ name: "Dự kiến", color: "#0f766e", dashed: true, connectFrom: displayed.length ? { index: displayed.length - 1, value: last.count } : undefined, values: [...displayed.map(() => null), ...future.map((row) => row.predicted)] }] : [])
-          ]} /> : <CountList key={view} rows={report[view] || []} empty={view === "rankedHours" ? "Chưa có số liệu theo giờ." : "Chưa có số liệu."} />}
+          {view === "monthly" && <MonthlyVisitChart months={displayed} future={future} trendPoints={report.trend?.points ?? []} />}
+          {view === "daily" && <DailyVisitChart days={report.daily ?? []} />}
+          {view !== "monthly" && view !== "daily" && <CountList key={view} rows={report[view] || []} empty={view === "rankedHours" ? "Chưa có số liệu theo giờ." : "Chưa có số liệu."} />}
         </section>
         <section className="vr-panel vr-future"><h2>Lượt khám dự kiến</h2>
           {future.length ? <div className="vr-future-scroll"><table aria-label="Số lượt dự kiến theo tháng"><thead><tr><th>Tháng</th><th>Số lượt</th></tr></thead><tbody>{future.map((row) => <tr key={row.month}>

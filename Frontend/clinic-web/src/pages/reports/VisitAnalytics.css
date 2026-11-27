@@ -37,6 +37,8 @@
 .vr-views button { border: 0; border-radius: 6px; padding: 7px 10px; background: transparent; color: #475569; }
 .vr-views button:hover { background: #f1f5f9; }
 .vr-views button[aria-pressed="true"] { color: #1d4ed8; background: #eff6ff; font-weight: 600; }
+.visit-report .vr-day-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.vr-day-period select { min-height: 34px; padding: 4px 8px; }
 .vr-segment { display: inline-flex; gap: 3px; padding: 3px; border-radius: 8px; background: #f1f5f9; }
 .vr-segment button { border: 0; background: transparent; border-radius: 5px; color: #64748b; padding: 6px 9px; font-size: 12px; }
 .vr-segment button[aria-pressed="true"] { background: white; color: #1d4ed8; box-shadow: 0 1px 3px #0f172a12; }
